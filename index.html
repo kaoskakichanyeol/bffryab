@@ -1,0 +1,2851 @@
+<!DOCTYPE html>
+<!--
+  BFFRYAB — Be Real, You're Broke
+  Aplikasi pribadi untuk menahan belanja impulsif. Satu file: HTML + CSS + JavaScript.
+
+  PETA FILE (cari kata "Tahap" untuk melompat):
+    Tahap 1  HTML        = "tulang": struktur & teks
+    Tahap 2  CSS         = "baju": warna, ukuran, tata letak   (di dalam <style>)
+    Tahap 3  JavaScript  = "otot": pindah layar, simpan data    (di dalam <script>)
+    Tahap 4  Catat skip/buy, angka di Home, Stashed
+    Tahap 5  Think it through + waiting room
+    Tahap 6  Grid setahun + statistik
+    Tahap 7  Toko pura-pura (BFFR Mall & Eats) + pelacakan
+    Tahap 7b Screenshot → potong → baca teks (OCR) → toko, gambar di IndexedDB
+
+  File pendamping (opsional, untuk ikon di layar HP): manifest.json, icon.png, icon-192.png
+-->
+<html lang="en">
+<head>
+  <!-- <head> berisi info tentang halaman. Bagian ini tidak tampil di layar. -->
+  <meta charset="UTF-8">
+  <!-- Baris ini membuat halaman pas di layar HP, tidak mengecil seperti versi desktop -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F6F1FF">
+  <meta name="color-scheme" content="light">
+  <!-- Ikon & nama saat dipasang di layar utama HP (tahap 8) -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon.png">
+  <meta name="apple-mobile-web-app-title" content="BFFRYAB">
+  <title>BFFRYAB – Be Real, You're Broke</title>
+
+  <!-- Huruf "Bricolage Grotesque" diambil dari Google Fonts. Kalau internet mati,
+       browser memakai huruf bawaan HP (lihat --font di bawah). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
+
+  <style>
+    /* =====================================================================
+       CSS = aturan tampilan. Pola dasarnya:
+         pemilih { properti: nilai; }
+       Contoh: .stat-card { background: white; }
+       artinya "semua elemen ber-class stat-card, beri latar putih".
+       ===================================================================== */
+
+    /* ---------- 1. Variabel warna & ukuran ----------
+       Ditulis sekali di :root, lalu dipakai di mana-mana dengan var(--nama).
+       Mau ganti warna pink di seluruh aplikasi? Cukup ubah satu baris ini. */
+    :root {
+      --paper: #F6F1FF;      /* latar: lavender pucat */
+      --ink: #1F1A3D;        /* "tinta": teks & garis tepi */
+      --muted: #6B6590;      /* teks keterangan */
+      --bubblegum: #FF7AB6;  /* tombol utama */
+      --lemon: #FFE45C;      /* sorotan */
+      --mint: #46E3A5;       /* skip = hijau */
+      --tomato: #FF5A4E;     /* beli = merah */
+      --sky: #7CC8FF;        /* toko pura-pura */
+      --white: #FFFFFF;
+
+      --line: 2.5px solid var(--ink);   /* garis tepi tebal ala stiker */
+      --pop: 4px 4px 0 var(--ink);      /* bayangan keras, bukan bayangan buram */
+      --font: 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* ---------- 2. Dasar halaman ---------- */
+    * { box-sizing: border-box; }   /* ukuran kotak sudah termasuk garis tepi */
+    /* Atribut hidden harus selalu menang, walau elemennya punya display: grid/flex */
+    [hidden] { display: none !important; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    main {
+      max-width: 480px;        /* di layar lebar tetap selebar HP */
+      margin: 0 auto;          /* "auto" kiri-kanan = posisi di tengah */
+      padding: 4px 18px 120px; /* bawah 120px supaya tidak tertutup menu bawah */
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      margin: 30px 0 10px;
+    }
+
+    .empty { color: var(--muted); font-size: 14px; margin: 0; }
+
+    /* Garis fokus yang jelas untuk pengguna keyboard */
+    :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+    /* ---------- 3. Header ---------- */
+    .app-header {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 22px 18px 14px;
+    }
+    .app-header h1 {
+      margin: 0;
+      font-size: 44px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.035em;
+    }
+    .tagline { margin: 6px 0 0; color: var(--muted); font-weight: 500; }
+
+    /* ---------- 4. Layar: hanya yang ber-class "active" yang tampil ---------- */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ---------- 5. Tombol besar "I have an urge!" ---------- */
+    .big-button {
+      display: block;
+      width: 100%;
+      min-height: 116px;
+      margin-top: 8px;
+      font: inherit;              /* pakai huruf yang sama dengan halaman */
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      background: var(--bubblegum);
+      border: 3px solid var(--ink);
+      border-radius: 24px;
+      box-shadow: 6px 6px 0 var(--ink);
+      cursor: pointer;
+      transition: transform 0.08s, box-shadow 0.08s;
+    }
+    /* :active = saat sedang ditekan → tombol "turun" seperti stiker ditekan */
+    .big-button:active {
+      transform: translate(4px, 4px);
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+
+    /* ---------- 6. Kartu angka ---------- */
+    .stat-grid {
+      display: grid;                          /* grid = susun dalam kolom & baris */
+      grid-template-columns: repeat(2, 1fr);  /* 2 kolom sama lebar */
+      gap: 10px;
+    }
+    .stat-card {
+      background: var(--white);
+      border: var(--line);
+      border-radius: 16px;
+      box-shadow: 3px 3px 0 var(--ink);
+      padding: 10px 12px;
+    }
+    /* Kartu Stashed: selebar 2 kolom, label di kiri & angka di kanan */
+    .stat-card.stat-wide {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .stat-wide .stat-value { white-space: nowrap; }
+
+    /* Kartu pertama (Impulse spend) = angka terpenting: selebar 2 kolom, kuning */
+    .stat-card:first-child {
+      grid-column: 1 / -1;
+      background: var(--lemon);
+      box-shadow: var(--pop);
+      padding: 14px 16px;
+    }
+    .stat-label { margin: 0; font-size: 13px; font-weight: 700; }
+    .stat-value {
+      margin: 2px 0;
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.15;
+      font-variant-numeric: tabular-nums;   /* angka sama lebar, rapi saat berubah */
+      overflow-wrap: anywhere;
+    }
+    .stat-card:first-child .stat-value { font-size: 36px; letter-spacing: -0.02em; }
+    .stat-note { margin: 0; font-size: 12px; line-height: 1.35; color: var(--muted); }
+    .stat-card:first-child .stat-note { color: var(--ink); }
+
+    /* ---------- 7. Daftar riwayat: dibuat seperti struk belanja ---------- */
+    .log-list {
+      list-style: none;     /* hilangkan titik bawaan <ul> */
+      margin: 0;
+      padding: 4px 14px;
+      background: var(--white);
+      border: var(--line);
+      border-radius: 6px;
+    }
+    .log-list li { padding: 10px 0; }
+    .log-list li + li { border-top: 2px dashed #CFC8E8; }  /* garis putus-putus antar baris */
+
+    /* ---------- 8. Toko & pengaturan ---------- */
+    .pretend-banner {
+      margin: 8px 0 0;
+      padding: 10px 14px;
+      background: var(--sky);
+      border: var(--line);
+      border-radius: 12px;
+      font-weight: 700;
+    }
+
+    label { display: block; font-weight: 700; margin-bottom: 6px; }
+    select {
+      font: inherit;
+      color: var(--ink);
+      background: var(--white);
+      border: var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      min-width: 180px;
+    }
+    .howto { padding-left: 20px; margin: 0; }
+    .howto li { margin-bottom: 8px; }
+
+    /* ---------- 9. Menu bawah ---------- */
+    .bottom-nav {
+      position: fixed;      /* menempel di layar walau halaman di-scroll */
+      left: 0; right: 0; bottom: 0;
+      display: flex;        /* flex = susun berjajar ke samping */
+      justify-content: center;
+      gap: 4px;
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+      background: var(--ink);
+    }
+    .nav-btn {
+      flex: 1;
+      max-width: 110px;
+      display: flex;
+      flex-direction: column;   /* ikon di atas, tulisan di bawah */
+      align-items: center;
+      gap: 2px;
+      padding: 6px 4px;
+      font-size: 22px;
+      line-height: 1;
+      color: var(--white);
+      text-decoration: none;    /* hilangkan garis bawah link */
+      border-radius: 14px;
+    }
+    .nav-btn span { font-size: 12px; font-weight: 700; }
+    .nav-btn.active { background: var(--lemon); color: var(--ink); }
+
+    /* ---------- 10. Pesan singkat (toast) yang muncul lalu hilang ---------- */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 96px;
+      transform: translate(-50%, 20px);
+      width: max-content;
+      max-width: calc(100% - 36px);
+      padding: 10px 16px;
+      background: var(--ink);
+      color: var(--white);
+      font-weight: 600;
+      font-size: 14px;
+      border-radius: 999px;
+      opacity: 0;               /* awalnya tak terlihat */
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 50;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ---------- 11. Lembar yang muncul dari bawah (sheet) ---------- */
+    .sheet {
+      position: fixed;
+      inset: 0;                                 /* menutup seluruh layar */
+      display: flex;
+      align-items: flex-end;                    /* kartunya menempel di bawah */
+      justify-content: center;
+      background: rgba(31, 26, 61, 0.45);       /* tinta transparan */
+      z-index: 40;
+    }
+    .sheet[hidden] { display: none; }
+    .sheet-card {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      max-height: 92vh;
+      overflow-y: auto;                         /* bisa di-scroll kalau isinya panjang */
+      padding: 22px 18px calc(22px + env(safe-area-inset-bottom));
+      background: var(--white);
+      border: var(--line);
+      border-bottom: none;
+      border-radius: 24px 24px 0 0;
+      animation: slide-up 0.22s ease-out;
+    }
+    @keyframes slide-up { from { transform: translateY(40px); opacity: 0; } }
+    .sheet-card h2 { margin-top: 0; padding-right: 40px; }
+    .sheet-close {
+      position: absolute;
+      top: 14px; right: 14px;
+      width: 36px; height: 36px;
+      font: inherit; font-size: 16px; font-weight: 800;
+      color: var(--ink);
+      background: var(--paper);
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    body.locked { overflow: hidden; }   /* halaman belakang tidak ikut ter-scroll */
+
+    /* ---------- 12. Isian formulir ---------- */
+    .field-label { font-weight: 700; margin: 0 0 6px; }
+    .optional { font-weight: 500; color: var(--muted); font-size: 14px; }
+    input[type="text"], input[type="number"], textarea {
+      display: block;
+      width: 100%;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      color: var(--ink);
+      background: var(--white);
+      border: var(--line);
+      border-radius: 12px;
+    }
+    .hint { margin: -8px 0 10px; font-size: 13px; color: var(--muted); min-height: 1em; }
+    .big-emoji { font-size: 48px; margin: 0; line-height: 1.2; }
+
+    /* Chip = tombol kecil berbentuk pil untuk pilihan */
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .chip-row:empty { display: none; }
+    .chip {
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      background: var(--white);
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .chip.selected { background: var(--lemon); box-shadow: 2px 2px 0 var(--ink); }
+    .chip-small { padding: 5px 12px; font-size: 14px; background: var(--paper); }
+
+    /* ---------- 13. Tombol biasa ---------- */
+    .sheet-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .btn {
+      padding: 14px 10px;
+      font: inherit;
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--ink);
+      border: var(--line);
+      border-radius: 16px;
+      box-shadow: 3px 3px 0 var(--ink);
+      cursor: pointer;
+    }
+    .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+    .btn-skip { background: var(--mint); }
+    .btn-buy { background: var(--tomato); }
+    .btn-plain { background: var(--white); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ---------- 14. Baris riwayat + cap "Nope"/"Bought" ---------- */
+    .log-row { display: flex; align-items: center; gap: 10px; }
+    .log-emoji { font-size: 22px; }
+    .log-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .log-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log-meta { font-size: 13px; color: var(--muted); }
+    .stamp {
+      padding: 2px 8px;
+      font-size: 13px;
+      font-weight: 800;
+      border: 2px solid currentColor;   /* garis tepi ikut warna teks */
+      border-radius: 6px;
+      transform: rotate(-6deg);         /* miring seperti cap stempel */
+    }
+    .stamp-skip { color: #0E8A5B; }
+    .stamp-buy { color: #C9302A; }
+    .icon-btn {
+      width: 32px; height: 32px;
+      font-size: 15px;
+      color: var(--ink);
+      background: none;
+      border: 2px solid transparent;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .icon-btn:active { border-color: var(--ink); }
+
+    /* ---------- 15. Confetti ---------- */
+    .confetti {
+      position: fixed;
+      top: -16px;
+      width: 9px;
+      height: 14px;
+      border-radius: 2px;
+      z-index: 100;
+      pointer-events: none;
+      animation: fall 1.8s ease-in forwards;
+    }
+    @keyframes fall { to { transform: translate(var(--drift), 105vh) rotate(540deg); } }
+
+    /* ---------- 16. Think it through (tahap 5) ---------- */
+    .btn-full { display: block; width: 100%; margin-top: 10px; }
+    .btn-wait { background: var(--sky); }
+    .btn-next { background: var(--ink); color: var(--white); }
+    .step-count { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
+    .think-item {
+      display: inline-block;
+      margin: -4px 0 16px;
+      padding: 4px 12px;
+      font-weight: 700;
+      background: var(--paper);
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+    }
+    .think-item:empty { display: none; }
+    /* Skala 1–5: angka besar dengan keterangan kecil di bawahnya */
+    .scale { flex-wrap: nowrap; }
+    .scale .chip {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 2px;
+      font-size: 22px;
+      line-height: 1.1;
+      border-radius: 14px;
+    }
+    .scale small { font-size: 11px; font-weight: 600; }
+    textarea { resize: vertical; min-height: 76px; }
+    .timer {
+      margin: 4px 0 8px;
+      font-size: 40px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+    .timer.done { color: #0E8A5B; }
+    .link-btn {
+      display: block;
+      margin: 0 auto;
+      padding: 6px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--muted);
+      text-decoration: underline;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    .step-nav { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 20px; }
+    .verdict {
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      background: var(--paper);
+      border: var(--line);
+      border-radius: 16px;
+    }
+    .verdict p { margin: 4px 0 0; }
+    .verdict-actions { display: grid; gap: 10px; }
+    .btn.suggested { position: relative; }
+    .btn.suggested::after {          /* ::after = tempelan teks buatan CSS */
+      content: 'Suggested';
+      position: absolute;
+      top: -10px; right: 12px;
+      padding: 1px 8px;
+      font-size: 12px;
+      background: var(--lemon);
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+    }
+
+    /* ---------- 17. Kartu waiting room ---------- */
+    .wait-card {
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      background: var(--white);
+      border: var(--line);
+      border-radius: 16px;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .wait-card.ready { background: var(--lemon); }
+    .wait-top { display: flex; gap: 8px; align-items: baseline; font-weight: 700; }
+    .wait-top .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wait-time { margin: 2px 0 10px; font-size: 14px; }
+    .wait-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn-sm { padding: 9px 8px; font-size: 15px; border-radius: 12px; }
+
+    /* ---------- 18. Grafik & grid (tahap 6) ----------
+       Warna grafik sedikit lebih gelap dari warna tombol, supaya tetap terbedakan
+       oleh orang dengan buta warna (sudah dicek dengan alat validasi palet). */
+    :root {
+      --chart-skip: #2FBF86;
+      --chart-buy: #F0483C;
+      --chart-empty: #E6E1F5;
+      --chart-line: #D9D3EE;
+    }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+    .key-skip, .day.skip { background: var(--chart-skip); }
+    .key-buy, .day.buy { background: var(--chart-buy); }
+    /* Hari campuran: setengah hijau, setengah merah (bukan warna ketiga) */
+    .key-mixed, .day.mixed { background: linear-gradient(135deg, var(--chart-skip) 50%, var(--chart-buy) 50%); }
+    .key-empty, .day { background: var(--chart-empty); }
+
+    .year-card, .chart-card {
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      background: var(--white);
+      border: var(--line);
+      border-radius: 16px;
+    }
+    .year-title { margin: 0 0 8px; font-weight: 800; }
+    .year-scroll { overflow-x: auto; padding-bottom: 6px; }   /* geser ke samping */
+    .year-months, .year-grid {
+      display: grid;
+      grid-auto-columns: 11px;   /* lebar tiap kolom (= 1 minggu) */
+      gap: 3px;
+    }
+    .year-months { grid-auto-flow: column; height: 16px; font-size: 11px; color: var(--muted); }
+    .year-months span { white-space: nowrap; }
+    .year-grid {
+      grid-template-rows: repeat(7, 11px);   /* 7 baris = Senin..Minggu */
+      grid-auto-flow: column;                /* isi ke bawah dulu, lalu kolom berikutnya */
+    }
+    .day { width: 11px; height: 11px; border-radius: 3px; cursor: pointer; }
+    .day.out { visibility: hidden; }         /* hari di luar tahun ini */
+    .day.future { background: none; border: 1px solid var(--chart-empty); }
+    .day.today { outline: 2px solid var(--ink); outline-offset: 1px; }
+    .day.picked { outline: 2px solid var(--ink); }
+    .readout { margin: 6px 0 0; font-size: 14px; min-height: 1.5em; }
+
+    .pattern-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pattern {
+      padding: 10px 12px;
+      background: var(--white);
+      border: var(--line);
+      border-radius: 14px;
+    }
+    .pattern .stat-value { font-size: 18px; }
+
+    /* Grafik batang buatan sendiri dari <div> */
+    .bars {
+      display: flex;
+      align-items: flex-end;     /* batang tumbuh dari bawah */
+      gap: 6px;
+      height: 150px;
+      border-bottom: 1px solid var(--chart-line);   /* garis dasar */
+    }
+    .bar-col {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      cursor: pointer;
+    }
+    .bar-col.active .bar-value { color: var(--ink); }
+    .bar-value { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; margin-bottom: 3px; }
+    .stack { width: 100%; max-width: 24px; display: flex; flex-direction: column-reverse; gap: 2px; }
+    .seg { width: 100%; }
+    .seg:last-child { border-radius: 4px 4px 0 0; }   /* ujung atas membulat, dasar tetap rata */
+    .seg-skip { background: var(--chart-skip); }
+    .seg-buy { background: var(--chart-buy); }
+    .bar-col.active .stack { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px 4px 0 0; }
+    .bar-axis { display: flex; gap: 6px; margin-top: 4px; }
+    .bar-axis span { flex: 1; text-align: center; font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .bar-axis span.now { font-weight: 800; color: var(--ink); }
+
+    details { margin-top: 8px; font-size: 14px; }
+    summary { cursor: pointer; font-weight: 700; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--chart-line); }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* ---------- 19. Toko pura-pura (tahap 7) ---------- */
+    .cooling-note {
+      margin: 10px 0 0;
+      padding: 8px 12px;
+      font-size: 14px;
+      background: var(--white);
+      border: 2px dashed var(--ink);
+      border-radius: 12px;
+    }
+    .shop-tabs { display: flex; gap: 6px; margin: 14px 0; overflow-x: auto; }
+    .shop-tab {
+      flex: 1;
+      padding: 9px 10px;
+      font: inherit; font-size: 14px; font-weight: 800;
+      white-space: nowrap;
+      color: var(--ink);
+      background: var(--white);
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .shop-tab.active { background: var(--ink); color: var(--white); }
+    .badge:not(:empty) {
+      margin-left: 4px; padding: 0 6px;
+      font-size: 12px;
+      color: var(--ink); background: var(--lemon);
+      border-radius: 999px;
+    }
+
+    /* Hitung mundur flash sale */
+    .flash-strip {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      color: var(--lemon);
+      background: var(--ink);
+      border-radius: 14px;
+      font-weight: 800;
+    }
+    .flash-time { font-variant-numeric: tabular-nums; color: var(--white); }
+
+    /* Voucher berbentuk kupon dengan tepi putus-putus */
+    .voucher-row { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; }
+    .voucher {
+      flex: none;
+      padding: 6px 12px;
+      font-size: 13px; font-weight: 700;
+      background: var(--lemon);
+      border: 2px dashed var(--ink);
+      border-radius: 10px;
+    }
+    .voucher b { display: block; font-size: 14px; }
+
+    /* Etalase 2 kolom */
+    .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .product {
+      display: flex; flex-direction: column;
+      background: var(--white);
+      border: var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .product-img {
+      aspect-ratio: 1 / 1;           /* kotak persegi */
+      display: grid; place-items: center;
+      font-size: 56px;
+      border-bottom: var(--line);
+    }
+    /* contain = seluruh potongan screenshot terlihat, tidak terpotong */
+    .product-img img { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--white); }
+    .product-body { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; }
+    .product-name {
+      font-size: 14px; font-weight: 600; line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .price { font-size: 17px; font-weight: 800; }
+    .strike { display: block; font-size: 12px; color: var(--muted); text-decoration: line-through; }
+    .tag { align-self: flex-start; font-size: 11px; font-weight: 700; color: var(--muted); }
+    .tag-flash { color: #C9302A; }
+    .product-actions { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; }
+    .add-btn {
+      flex: 1;
+      padding: 7px 6px;
+      font: inherit; font-size: 14px; font-weight: 800;
+      color: var(--ink);
+      background: var(--bubblegum);
+      border: 2px solid var(--ink);
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .add-btn:active { transform: translate(1px, 1px); }
+    .add-tile {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      padding: 12px;
+      font: inherit; font-weight: 800; font-size: 15px;
+      color: var(--ink);
+      text-align: center;
+      background: var(--paper);
+      border: 2.5px dashed var(--ink);
+      border-radius: 14px;
+      cursor: pointer;
+    }
+    .add-tile span { font-size: 24px; }
+    .emoji-row .chip { font-size: 22px; padding: 4px 10px; }
+
+    /* Tombol keranjang mengambang */
+    .cart-fab {
+      position: fixed;
+      left: 50%;
+      bottom: calc(84px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      padding: 12px 22px;
+      font: inherit; font-size: 16px; font-weight: 800;
+      color: var(--ink);
+      background: var(--bubblegum);
+      border: var(--line);
+      border-radius: 999px;
+      box-shadow: var(--pop);
+      cursor: pointer;
+      z-index: 30;
+    }
+
+    /* Keranjang */
+    .cart-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 2px dashed #CFC8E8; }
+    .cart-thumb {
+      width: 48px; height: 48px; flex: none;
+      display: grid; place-items: center;
+      font-size: 26px;
+      border: 2px solid var(--ink); border-radius: 10px; overflow: hidden;
+    }
+    .cart-thumb img { width: 100%; height: 100%; object-fit: contain; background: var(--white); }
+    .qty { display: flex; align-items: center; gap: 6px; font-weight: 800; }
+    .qty button {
+      width: 30px; height: 30px;
+      font: inherit; font-weight: 800;
+      color: var(--ink); background: var(--paper);
+      border: 2px solid var(--ink); border-radius: 8px;
+      cursor: pointer;
+    }
+    .summary { margin: 12px 0; }
+    .summary div { display: flex; justify-content: space-between; padding: 2px 0; }
+    .summary .total { font-size: 19px; font-weight: 800; border-top: 2px solid var(--ink); margin-top: 6px; padding-top: 6px; }
+    .placed-card { text-align: center; }
+    .placed-card h2 { padding-right: 0; font-size: 28px; }
+
+    /* Pelacakan pesanan */
+    .order-card {
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      background: var(--white);
+      border: var(--line);
+      border-radius: 16px;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .order-card.arrived { background: var(--lemon); }
+    .order-head { display: flex; justify-content: space-between; gap: 10px; font-weight: 800; }
+    .order-items { margin: 2px 0 8px; font-size: 14px; color: var(--muted); }
+    .order-status { margin: 0 0 6px; font-weight: 700; }
+    .track { position: relative; height: 34px; margin: 0 14px 6px; }
+    .track::before {               /* jalanan */
+      content: '';
+      position: absolute; left: 0; right: 0; top: 50%;
+      border-top: 3px dashed var(--ink);
+    }
+    .track-fill {
+      position: absolute; left: 0; top: calc(50% - 2px);
+      height: 5px;
+      background: var(--ink);
+      border-radius: 3px;
+    }
+    .vehicle {
+      position: absolute; top: 50%;
+      font-size: 26px; line-height: 1;
+      transform: translate(-50%, -60%) scaleX(-1);   /* dibalik supaya menghadap ke kanan */
+      transition: left 1s;
+    }
+    .timeline { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+    .timeline li { display: flex; gap: 8px; padding: 2px 0; color: var(--muted); }
+    .timeline li.done { color: var(--ink); font-weight: 600; }
+    .timeline li time { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+    /* ---------- 20. Screenshot → produk (tahap 7b) ---------- */
+    .file-btn { text-align: center; }
+    .crop-wrap {
+      position: relative;
+      width: fit-content;
+      margin: 0 auto;
+      overflow: hidden;
+      border: var(--line);
+      border-radius: 10px;
+      touch-action: none;     /* geser jari = menggambar kotak, bukan menggulir */
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: crosshair;
+    }
+    #crop-img { display: block; max-width: 100%; max-height: 56vh; }
+    .crop-box {
+      position: absolute;
+      border: 3px solid var(--bubblegum);
+      box-shadow: 0 0 0 9999px rgba(31, 26, 61, 0.45);   /* gelapkan bagian di luar kotak */
+      pointer-events: none;
+    }
+    .shot-preview {
+      display: grid; place-items: center;
+      max-height: 160px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      background: var(--paper);
+      border: 2px solid var(--ink);
+      border-radius: 12px;
+    }
+    .shot-preview img { max-width: 100%; max-height: 160px; display: block; }
+    .ocr-status { margin: 0 0 12px; font-weight: 700; font-size: 14px; }
+    .ocr-status:empty { display: none; }
+
+    /* Hormati pengaturan HP "kurangi animasi" */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ============ HEADER: judul aplikasi ============ -->
+  <header class="app-header">
+    <h1>BFFRYAB</h1>
+    <p class="tagline">Be Real, You're Broke 💸</p>
+  </header>
+
+  <main>
+    <!-- ============ LAYAR 1: HOME ============ -->
+    <section id="screen-home" class="screen active">
+      <button id="btn-urge" class="big-button">😩 I have an urge!</button>
+
+      <h2>How you're doing</h2>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <p class="stat-label">Impulse spend this month</p>
+          <p class="stat-value" id="stat-spend">Rp0</p>
+          <p class="stat-note" id="stat-spend-note">Money that actually left your wallet</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Skip rate (month)</p>
+          <p class="stat-value" id="stat-skiprate">–</p>
+          <p class="stat-note" id="stat-skiprate-note">Urges you said no to</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Urges (week)</p>
+          <p class="stat-value" id="stat-urges">0</p>
+          <p class="stat-note" id="stat-urges-note">Fewer is better</p>
+        </div>
+        <div class="stat-card stat-wide">
+          <div>
+            <p class="stat-label">Stashed (all time)</p>
+            <p class="stat-note">Only real transfers to savings count</p>
+          </div>
+          <p class="stat-value" id="stat-stashed">Rp0</p>
+        </div>
+      </div>
+
+      <h2>Waiting room ⏳</h2>
+      <div id="waiting-list">
+        <p class="empty">Nothing cooling off right now.</p>
+      </div>
+
+      <h2>Recent</h2>
+      <ul id="recent-list" class="log-list">
+        <li class="empty">No logs yet. Tap the big button when an urge hits.</li>
+      </ul>
+    </section>
+
+    <!-- ============ LAYAR 2: STATS ============ -->
+    <section id="screen-stats" class="screen">
+      <h2>Your year</h2>
+      <!-- Keterangan warna: selalu ada, supaya arti warna tidak perlu ditebak -->
+      <div class="legend">
+        <span><i class="key key-skip"></i>Skipped</span>
+        <span><i class="key key-buy"></i>Bought</span>
+        <span><i class="key key-mixed"></i>Both</span>
+        <span><i class="key key-empty"></i>No log</span>
+      </div>
+      <div id="grids"></div>
+      <p class="readout" id="grid-readout">Tap a square to see that day.</p>
+
+      <h2>Patterns</h2>
+      <div class="pattern-grid" id="patterns"></div>
+
+      <h2>Impulse spend by month</h2>
+      <div class="chart-card">
+        <div id="chart-months"></div>
+        <p class="readout" id="months-readout">Tap a bar for the amount.</p>
+        <details>
+          <summary>Show as table</summary>
+          <table id="table-months"></table>
+        </details>
+      </div>
+
+      <h2>Urges per week</h2>
+      <div class="legend">
+        <span><i class="key key-skip"></i>Skipped</span>
+        <span><i class="key key-buy"></i>Bought</span>
+      </div>
+      <div class="chart-card">
+        <div id="chart-weeks"></div>
+        <p class="readout" id="weeks-readout">Tap a bar for the details.</p>
+        <details>
+          <summary>Show as table</summary>
+          <table id="table-weeks"></table>
+        </details>
+      </div>
+    </section>
+
+    <!-- ============ LAYAR 3: PRETEND SHOP ============ -->
+    <section id="screen-shop" class="screen">
+      <p class="pretend-banner">🎭 Pretend mode. No real money, no real stuff.</p>
+      <p class="cooling-note" id="cooling-note" hidden></p>
+      <div class="shop-tabs" id="shop-tabs">
+        <button type="button" class="shop-tab" data-tab="mall">🛍️ BFFR Mall</button>
+        <button type="button" class="shop-tab" data-tab="eats">🍜 BFFR Eats</button>
+        <button type="button" class="shop-tab" data-tab="orders">📦 Orders<span class="badge" id="orders-badge"></span></button>
+      </div>
+      <div id="shop-content"></div>
+    </section>
+
+    <!-- ============ LAYAR 4: SETTINGS ============ -->
+    <section id="screen-settings" class="screen">
+      <h2>Settings</h2>
+      <label for="set-wait">Waiting time before you decide</label>
+      <select id="set-wait">
+        <option value="24">24 hours</option>
+        <option value="48" selected>48 hours</option>
+        <option value="72">72 hours</option>
+      </select>
+
+      <p id="data-info" class="empty" style="margin-top:12px"></p>
+
+      <h2>How to use</h2>
+      <ol class="howto">
+        <li>Feel an urge to buy? Tap <b>I have an urge!</b> before you open any shopping app.</li>
+        <li>Log it as <b>Skip</b> or <b>Bought</b>. Be honest — it's just you here.</li>
+        <li>Not sure? Use <b>Think it through</b>, or send it to the waiting room.</li>
+        <li>Need the checkout thrill? Go to the <b>Shop</b> tab. Everything there is pretend.</li>
+      </ol>
+
+      <h2>Danger zone</h2>
+      <button type="button" id="btn-reset" class="btn btn-plain">🗑️ Delete all data on this phone</button>
+    </section>
+  </main>
+
+  <!-- ============ NAVIGASI BAWAH ============ -->
+  <!-- href="#..." membuat link melompat ke bagian dengan id yang sama -->
+  <nav class="bottom-nav">
+    <a href="#screen-home" class="nav-btn active" data-screen="home">🏠<span>Home</span></a>
+    <a href="#screen-stats" class="nav-btn" data-screen="stats">📊<span>Stats</span></a>
+    <a href="#screen-shop" class="nav-btn" data-screen="shop">🛍️<span>Shop</span></a>
+    <a href="#screen-settings" class="nav-btn" data-screen="settings">⚙️<span>Settings</span></a>
+  </nav>
+
+  <!-- ===================================================================
+       LEMBAR (sheet) = jendela yang muncul dari bawah layar.
+       Atribut "hidden" membuatnya tersembunyi sampai JavaScript membukanya.
+       =================================================================== -->
+
+  <!-- Lembar 1: mencatat dorongan belanja -->
+  <div id="log-sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="log-title">
+      <button type="button" class="sheet-close" data-close aria-label="Close">✕</button>
+      <h2 id="log-title">What's tempting you?</h2>
+
+      <p class="field-label">Category</p>
+      <div class="chip-row" id="log-category">
+        <button type="button" class="chip" data-value="food">🍜 Food &amp; snacks</button>
+        <button type="button" class="chip" data-value="shopping">🛍️ Online shopping</button>
+      </div>
+
+      <label for="log-item">What is it? <span class="optional">(optional)</span></label>
+      <input id="log-item" type="text" placeholder="Iced coffee, sneakers…" autocomplete="off">
+
+      <label for="log-amount">How much? <span class="optional">(needed if you bought it)</span></label>
+      <input id="log-amount" type="number" inputmode="numeric" min="0" step="1000" placeholder="25000">
+      <p class="hint" id="amount-preview"></p>
+      <div class="chip-row" id="quick-amounts"></div>
+
+      <div class="sheet-actions">
+        <button type="button" id="btn-skip" class="btn btn-skip">✋ Skip it</button>
+        <button type="button" id="btn-buy" class="btn btn-buy">🛒 I bought it</button>
+      </div>
+      <button type="button" id="btn-think" class="btn btn-plain btn-full">🤔 Not sure? Think it through</button>
+    </div>
+  </div>
+
+  <!-- Lembar 1b (tahap 5): Think it through, 5 langkah -->
+  <div id="think-sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="think-title">
+      <button type="button" class="sheet-close" data-close aria-label="Close">✕</button>
+      <p class="step-count" id="think-count">Step 1 of 5</p>
+      <h2 id="think-title">How strong is the urge?</h2>
+      <p class="think-item" id="think-item"></p>
+
+      <!-- Langkah 1 -->
+      <div class="step" data-step="1">
+        <div class="chip-row scale" id="think-urge">
+          <button type="button" class="chip" data-value="1">1<small>meh</small></button>
+          <button type="button" class="chip" data-value="2">2<small>a bit</small></button>
+          <button type="button" class="chip" data-value="3">3<small>kinda</small></button>
+          <button type="button" class="chip" data-value="4">4<small>a lot</small></button>
+          <button type="button" class="chip" data-value="5">5<small>NOW</small></button>
+        </div>
+      </div>
+
+      <!-- Langkah 2 -->
+      <div class="step" data-step="2" hidden>
+        <div class="chip-row" id="think-feeling">
+          <button type="button" class="chip" data-value="bored">😐 Bored</button>
+          <button type="button" class="chip" data-value="stressed">😣 Stressed</button>
+          <button type="button" class="chip" data-value="tired">😴 Tired</button>
+          <button type="button" class="chip" data-value="sad">😢 Sad</button>
+          <button type="button" class="chip" data-value="fomo">🔥 FOMO / promo</button>
+          <button type="button" class="chip" data-value="hungry">🍜 Hungry</button>
+          <button type="button" class="chip" data-value="happy">🎉 Happy / celebrating</button>
+        </div>
+      </div>
+
+      <!-- Langkah 3 -->
+      <div class="step" data-step="3" hidden>
+        <label for="think-for">Reasons to buy <span class="optional">(one per line)</span></label>
+        <textarea id="think-for" rows="3"></textarea>
+        <label for="think-against">Reasons not to <span class="optional">(one per line)</span></label>
+        <textarea id="think-against" rows="3"></textarea>
+        <p class="timer" id="think-timer" aria-live="off">3:00</p>
+        <p class="hint">In a study, a few minutes of writing reasons lowered the urge to buy.</p>
+        <button type="button" class="link-btn" id="think-skip-timer">Skip the timer (not recommended)</button>
+      </div>
+
+      <!-- Langkah 4 -->
+      <div class="step" data-step="4" hidden>
+        <div class="chip-row" id="think-own">
+          <button type="button" class="chip" data-value="yes">Yes</button>
+          <button type="button" class="chip" data-value="kind">Kind of</button>
+          <button type="button" class="chip" data-value="no">No</button>
+        </div>
+        <label for="think-own-what">What is it? <span class="optional">(optional)</span></label>
+        <input id="think-own-what" type="text" placeholder="The hoodie I wore yesterday…" autocomplete="off">
+        <p class="hint">Picturing something you already own can redirect the urge.</p>
+      </div>
+
+      <!-- Langkah 5: hasil -->
+      <div class="step" data-step="5" hidden>
+        <div class="verdict" id="think-verdict"></div>
+        <div id="verdict-amount-wrap" hidden>
+          <label for="verdict-amount">How much does it cost?</label>
+          <input id="verdict-amount" type="number" inputmode="numeric" min="0" step="1000">
+        </div>
+        <div class="verdict-actions">
+          <button type="button" id="verdict-skip" class="btn btn-plain" data-color="btn-skip">✋ Skip it</button>
+          <button type="button" id="verdict-wait" class="btn btn-plain" data-color="btn-wait">⏳ Wait 48h</button>
+          <button type="button" id="verdict-buy" class="btn btn-plain" data-color="btn-buy">🛒 OK, it's planned</button>
+        </div>
+        <button type="button" class="link-btn" id="verdict-back" style="margin-top:12px">Change my answers</button>
+      </div>
+
+      <div class="step-nav" id="think-nav">
+        <button type="button" id="think-back" class="btn btn-plain">Back</button>
+        <button type="button" id="think-next" class="btn btn-next">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lembar 2: memindahkan uang sungguhan ke tabungan -->
+  <div id="stash-sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="stash-title">
+      <button type="button" class="sheet-close" data-close aria-label="Close">✕</button>
+      <p class="big-emoji">🎉</p>
+      <h2 id="stash-title">Nice. You skipped it.</h2>
+      <p>Want to make it real? Move the money to your savings account, then tap the button. Only real transfers count as Stashed.</p>
+      <label for="stash-amount">Amount you moved</label>
+      <input id="stash-amount" type="number" inputmode="numeric" min="0" step="1000">
+      <div class="sheet-actions">
+        <button type="button" id="btn-stash" class="btn btn-skip">💰 I moved it</button>
+        <button type="button" class="btn btn-plain" data-close>Not now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lembar 3: konfirmasi sebelum menghapus -->
+  <div id="confirm-sheet" class="sheet" hidden>
+    <div class="sheet-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
+      <h2 id="confirm-text">Are you sure?</h2>
+      <div class="sheet-actions">
+        <button type="button" id="confirm-yes" class="btn btn-buy">Delete</button>
+        <button type="button" class="btn btn-plain" data-close>Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Tahap 7: toko pura-pura ===== -->
+
+  <!-- Tombol keranjang yang mengambang di atas menu bawah -->
+  <button type="button" id="cart-fab" class="cart-fab" hidden>🛒 View cart <span id="cart-count"></span></button>
+
+  <!-- Lembar: tambah barang incaran sendiri -->
+  <div id="item-sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="item-title">
+      <button type="button" class="sheet-close" data-close aria-label="Close">✕</button>
+      <h2 id="item-title">Add something you're eyeing</h2>
+      <p class="field-label">Where does it go?</p>
+      <div class="chip-row" id="item-store">
+        <button type="button" class="chip" data-value="mall">🛍️ BFFR Mall</button>
+        <button type="button" class="chip" data-value="eats">🍜 BFFR Eats</button>
+      </div>
+      <label for="item-name">Name</label>
+      <input id="item-name" type="text" placeholder="Linen shirt, cheese martabak…" autocomplete="off">
+      <label for="item-price">Price</label>
+      <input id="item-price" type="number" inputmode="numeric" min="0" step="1000" placeholder="150000">
+      <p class="field-label">Pick an icon</p>
+      <div class="chip-row emoji-row" id="item-emoji"></div>
+      <button type="button" id="item-save" class="btn btn-skip btn-full">Add to the shop</button>
+    </div>
+  </div>
+
+  <!-- Lembar (tahap 7b): tambah barang dari screenshot -->
+  <div id="shot-sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="shot-title">
+      <button type="button" class="sheet-close" data-close aria-label="Close">✕</button>
+      <h2 id="shot-title">Add from a screenshot</h2>
+
+      <!-- Bagian A: pilih gambar -->
+      <div id="shot-pick">
+        <p>Screenshot your cart, a product page, or a TikTok live, then pick it here.</p>
+        <label class="btn btn-skip btn-full file-btn">📸 Choose screenshot
+          <input type="file" id="shot-file" accept="image/*" hidden>
+        </label>
+        <p class="hint" style="margin-top:12px">Pictures stay on this phone. The text is read on your phone too. The first time, the text reader downloads once (about 6 MB).</p>
+      </div>
+
+      <!-- Bagian B: tandai satu barang -->
+      <div id="shot-crop" hidden>
+        <p class="hint" id="crop-hint" style="margin:0 0 8px">Drag a box around one item: its name and price.</p>
+        <div class="crop-wrap" id="crop-wrap">
+          <img id="crop-img" alt="Your screenshot" draggable="false">
+          <div class="crop-box" id="crop-box" hidden></div>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" id="crop-whole" class="btn btn-plain">Whole picture</button>
+          <button type="button" id="crop-read" class="btn btn-next" disabled>Read this item</button>
+        </div>
+        <p class="hint" id="shot-count" style="margin:10px 0 0"></p>
+        <button type="button" class="link-btn" id="shot-other">Pick another screenshot</button>
+      </div>
+
+      <!-- Bagian C: hasil baca, periksa lalu simpan -->
+      <div id="shot-result" hidden>
+        <div class="shot-preview"><img id="shot-thumb" alt="The item you marked"></div>
+        <p class="ocr-status" id="ocr-status" aria-live="polite"></p>
+        <p class="field-label">Where does it go?</p>
+        <div class="chip-row" id="shot-store">
+          <button type="button" class="chip" data-value="mall">🛍️ BFFR Mall</button>
+          <button type="button" class="chip" data-value="eats">🍜 BFFR Eats</button>
+        </div>
+        <label for="shot-name">Name</label>
+        <input id="shot-name" type="text" autocomplete="off">
+        <label for="shot-price">Price</label>
+        <input id="shot-price" type="number" inputmode="numeric" min="0" step="1000">
+        <div class="chip-row" id="shot-prices"></div>
+        <div class="sheet-actions">
+          <button type="button" id="shot-back" class="btn btn-plain">Back</button>
+          <button type="button" id="shot-save" class="btn btn-skip">Add to shop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lembar: keranjang + checkout -->
+  <div id="cart-sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="cart-title">
+      <button type="button" class="sheet-close" data-close aria-label="Close">✕</button>
+      <h2 id="cart-title">Your cart</h2>
+      <div id="cart-body"></div>
+    </div>
+  </div>
+
+  <!-- Lembar: pesanan berhasil -->
+  <div id="placed-sheet" class="sheet" hidden>
+    <div class="sheet-card placed-card" role="dialog" aria-modal="true" aria-labelledby="placed-title">
+      <p class="big-emoji" id="placed-emoji">🎉</p>
+      <h2 id="placed-title">Order placed!</h2>
+      <p id="placed-text"></p>
+      <button type="button" id="placed-track" class="btn btn-next btn-full">Track my order</button>
+      <button type="button" class="link-btn" data-close style="margin-top:8px">Keep browsing</button>
+    </div>
+  </div>
+
+  <!-- Tempat pesan singkat. role="status" agar dibacakan pembaca layar. -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    /* =====================================================================
+       Tahap 3: JAVASCRIPT = "otot" aplikasi.
+       Tugasnya: membuat tombol bisa ditekan, menghitung angka, menyimpan data.
+       ===================================================================== */
+
+    // ---------- 1. Data aplikasi ----------
+    // Semua data disimpan dalam SATU objek bernama "state".
+    // localStorage = laci kecil di browser. Isinya tetap ada walau aplikasi ditutup,
+    // tapi hanya di browser & HP ini saja.
+    const STORAGE_KEY = 'bffryab-v1';
+
+    // Bentuk data saat aplikasi masih kosong
+    function freshState() {
+      return {
+        logs: [],                     // catatan skip / buy
+        waits: [],                    // barang di waiting room
+        settings: { waitHours: 48 },  // pengaturan
+        wishlist: [],                 // barang incaran sendiri di toko (tahap 7)
+        cart: { mall: [], eats: [] }, // isi keranjang per toko (tahap 7)
+        orders: []                    // pesanan pura-pura (tahap 7)
+      };
+    }
+
+    // Membaca data dari laci. Kalau belum ada atau rusak, mulai dari kosong.
+    function loadState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (!saved) return freshState();
+        const base = freshState();
+        // "..." = salin semua isi objek. Data tersimpan menimpa data kosong.
+        return {
+          ...base, ...saved,
+          settings: { ...base.settings, ...saved.settings },
+          cart: { ...base.cart, ...saved.cart }
+        };
+      } catch (err) {
+        return freshState();
+      }
+    }
+
+    // Menyimpan data ke laci. JSON.stringify mengubah objek jadi teks.
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (err) {
+        showToast("Couldn't save. Your browser storage may be full.");
+      }
+    }
+
+    let state = loadState();
+
+    // ---------- 2. Alat bantu kecil ----------
+    // $('stat-spend') = singkatan dari document.getElementById('stat-spend')
+    const $ = (id) => document.getElementById(id);
+
+    // 25000 → "Rp25.000"
+    function rupiah(n) {
+      return 'Rp' + Math.round(n || 0).toLocaleString('id-ID');
+    }
+
+    // Munculkan pesan singkat selama 2,6 detik
+    let toastTimer;
+    function showToast(text) {
+      const toast = $('toast');
+      toast.textContent = text;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+    }
+
+    // ---------- 3. Pindah layar ----------
+    let currentScreen = 'home';
+    function showScreen(name) {
+      currentScreen = name;
+      // Beri class "active" hanya pada layar yang dipilih; CSS menyembunyikan sisanya
+      document.querySelectorAll('.screen').forEach((screen) => {
+        screen.classList.toggle('active', screen.id === 'screen-' + name);
+      });
+      document.querySelectorAll('.nav-btn').forEach((btn) => {
+        const isActive = btn.dataset.screen === name;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-current', isActive ? 'page' : 'false');
+      });
+      window.scrollTo(0, 0);
+      renderScreen(name);
+    }
+
+    // Gambar ulang isi layar sesuai data terbaru
+    function renderScreen(name) {
+      if (name === 'home') renderHome();
+      if (name === 'stats') renderStats();
+      if (name === 'shop') renderShop();
+      if (name === 'settings') renderSettings();
+      $('cart-fab').hidden = true;     // tombol keranjang hanya muncul di toko
+      if (name === 'shop') updateCartFab();
+    }
+
+    // "Dengarkan" ketukan pada setiap tombol menu bawah
+    document.querySelectorAll('.nav-btn').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();          // jangan melompat seperti link biasa
+        showScreen(btn.dataset.screen);  // data-screen="stats" → showScreen('stats')
+      });
+    });
+
+    // ---------- 4. Layar Settings ----------
+    function renderSettings() {
+      $('set-wait').value = String(state.settings.waitHours);
+      $('data-info').textContent =
+        'Saved on this phone: ' + state.logs.length + ' logs, ' +
+        state.waits.length + ' waiting, ' + state.wishlist.length + ' shop items, ' +
+        state.orders.length + ' pretend orders.';
+    }
+
+    $('set-wait').addEventListener('change', (event) => {
+      state.settings.waitHours = Number(event.target.value);
+      saveState();
+      showToast('Saved. You will wait ' + state.settings.waitHours + ' hours before deciding.');
+    });
+
+    $('btn-reset').addEventListener('click', () => {
+      askConfirm('Delete everything on this phone? This can’t be undone.', 'Delete all', () => {
+        state = freshState();
+        saveState();
+        idbClear().catch(() => {});   // hapus juga semua gambar (tahap 7b)
+        renderSettings();
+        showToast('All data deleted.');
+      });
+    });
+
+    /* =====================================================================
+       Tahap 4: MENCATAT SKIP / BUY
+       ===================================================================== */
+
+    // ---------- 5. Info kategori ----------
+    const CATEGORY = {
+      food:     { emoji: '🍜', name: 'Food & snacks' },
+      shopping: { emoji: '🛍️', name: 'Online shopping' }
+    };
+
+    // ID unik untuk tiap catatan, misalnya "m3x9k2ab"
+    function makeId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    }
+
+    // Teks dari pengguna diamankan dulu sebelum masuk ke HTML,
+    // supaya tulisan seperti "<b>" tidak dianggap kode.
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---------- 6. Membuka & menutup lembar ----------
+    function openSheet(id) {
+      $(id).hidden = false;
+      document.body.classList.add('locked');
+    }
+    function closeSheet(id) {
+      $(id).hidden = true;
+      if (!document.querySelector('.sheet:not([hidden])')) document.body.classList.remove('locked');
+    }
+    // Ketuk latar gelap atau tombol ber-atribut data-close → lembar tertutup
+    document.querySelectorAll('.sheet').forEach((sheet) => {
+      sheet.addEventListener('click', (event) => {
+        if (event.target === sheet || event.target.closest('[data-close]')) closeSheet(sheet.id);
+      });
+    });
+    // Tombol Esc di keyboard juga menutup lembar
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('.sheet:not([hidden])').forEach((sheet) => closeSheet(sheet.id));
+    });
+
+    // Lembar konfirmasi serbaguna: askConfirm(pertanyaan, label tombol, apa yang dikerjakan)
+    let confirmAction = null;
+    function askConfirm(question, yesLabel, action) {
+      $('confirm-text').textContent = question;
+      $('confirm-yes').textContent = yesLabel;
+      confirmAction = action;
+      openSheet('confirm-sheet');
+    }
+    $('confirm-yes').addEventListener('click', () => {
+      closeSheet('confirm-sheet');
+      if (confirmAction) confirmAction();
+      confirmAction = null;
+    });
+
+    // ---------- 7. Lembar log: isi formulir ----------
+    let draft = { category: null };   // pilihan sementara saat formulir terbuka
+
+    function openLogSheet() {
+      draft = { category: null };
+      $('log-item').value = '';
+      $('log-amount').value = '';
+      $('amount-preview').textContent = '';
+      selectChip('log-category', null);
+      renderQuickAmounts();
+      openSheet('log-sheet');
+    }
+    $('btn-urge').addEventListener('click', openLogSheet);
+
+    // Tandai satu chip sebagai terpilih di dalam satu kelompok
+    function selectChip(groupId, value) {
+      document.querySelectorAll('#' + groupId + ' .chip').forEach((chip) => {
+        const on = chip.dataset.value === String(value);
+        chip.classList.toggle('selected', on);
+        chip.setAttribute('aria-pressed', on);
+      });
+    }
+
+    $('log-category').addEventListener('click', (event) => {
+      const chip = event.target.closest('.chip');   // chip mana yang diketuk?
+      if (!chip) return;
+      draft.category = chip.dataset.value;
+      selectChip('log-category', draft.category);
+      renderQuickAmounts();
+    });
+
+    // Tampilkan "= Rp25.000" di bawah kotak angka sambil mengetik
+    $('log-amount').addEventListener('input', () => {
+      const n = Number($('log-amount').value);
+      $('amount-preview').textContent = n > 0 ? '= ' + rupiah(n) : '';
+    });
+
+    // Nominal cepat: 3 nominal terakhir yang pernah dipakai di kategori ini
+    function recentAmounts(category) {
+      const amounts = [];
+      for (let i = state.logs.length - 1; i >= 0 && amounts.length < 3; i--) {
+        const log = state.logs[i];
+        const sameCategory = !category || log.category === category;
+        if (log.amount > 0 && sameCategory && !amounts.includes(log.amount)) amounts.push(log.amount);
+      }
+      return amounts;
+    }
+    function renderQuickAmounts() {
+      $('quick-amounts').innerHTML = recentAmounts(draft.category)
+        .map((a) => `<button type="button" class="chip chip-small" data-amount="${a}">${rupiah(a)}</button>`)
+        .join('');
+    }
+    $('quick-amounts').addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-amount]');
+      if (!chip) return;
+      $('log-amount').value = chip.dataset.amount;
+      $('amount-preview').textContent = '= ' + rupiah(Number(chip.dataset.amount));
+    });
+
+    // Baca & periksa isian. Kalau ada yang kurang, kembalikan null.
+    function readLogForm(decision) {
+      if (!draft.category) {
+        showToast('Pick a category first.');
+        return null;
+      }
+      const amount = Number($('log-amount').value) || 0;
+      if (decision === 'buy' && amount <= 0) {
+        showToast('Add how much you spent.');
+        $('log-amount').focus();
+        return null;
+      }
+      return { category: draft.category, item: $('log-item').value.trim(), amount };
+    }
+
+    // ---------- 8. Menyimpan catatan ----------
+    function addLog(entry) {
+      const log = {
+        id: makeId(),
+        date: new Date().toISOString(),   // waktu sekarang, contoh "2026-11-12T03:15:00.000Z"
+        category: entry.category,
+        item: entry.item || '',
+        amount: entry.amount || 0,
+        decision: entry.decision,         // 'skip' atau 'buy'
+        stashed: 0,                       // uang sungguhan yang dipindah ke tabungan
+        think: entry.think || null,       // jawaban "Think it through" (tahap 5)
+        planned: entry.planned || false,  // dibeli setelah dipikirkan (tahap 5)
+        fromWait: entry.fromWait || false // diputuskan dari waiting room (tahap 5)
+      };
+      state.logs.push(log);               // tambahkan ke akhir daftar
+      saveState();
+      renderHome();
+      return log;
+    }
+
+    $('btn-skip').addEventListener('click', () => {
+      const entry = readLogForm('skip');
+      if (!entry) return;
+      const log = addLog({ ...entry, decision: 'skip' });
+      closeSheet('log-sheet');
+      celebrate();
+      openStashSheet(log);
+    });
+
+    $('btn-buy').addEventListener('click', () => {
+      const entry = readLogForm('buy');
+      if (!entry) return;
+      addLog({ ...entry, decision: 'buy' });
+      closeSheet('log-sheet');
+      showToast('Logged. Being honest counts too.');
+    });
+
+    // ---------- 9. Stash: hanya uang yang benar-benar dipindah ----------
+    let stashTargetId = null;
+    function openStashSheet(log) {
+      stashTargetId = log.id;
+      $('stash-amount').value = log.amount || '';
+      openSheet('stash-sheet');
+    }
+    $('btn-stash').addEventListener('click', () => {
+      const amount = Number($('stash-amount').value) || 0;
+      if (amount <= 0) {
+        showToast('Enter the amount you moved.');
+        return;
+      }
+      const log = state.logs.find((l) => l.id === stashTargetId);
+      if (log) log.stashed = amount;
+      saveState();
+      renderHome();
+      closeSheet('stash-sheet');
+      showToast(rupiah(amount) + ' stashed. That one is real.');
+    });
+
+    // ---------- 10. Hitung-hitungan tanggal ----------
+    function startOfWeek(d) {                 // Senin minggu ini, jam 00:00
+      const daysSinceMonday = (d.getDay() + 6) % 7;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate() - daysSinceMonday);
+    }
+    function addDays(d, n) {
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    }
+    function logsBetween(from, to) {          // catatan dengan tanggal from ≤ t < to
+      return state.logs.filter((log) => {
+        const t = new Date(log.date);
+        return t >= from && t < to;
+      });
+    }
+    function sumBuys(logs) {                  // jumlahkan nominal yang dibeli
+      return logs
+        .filter((log) => log.decision === 'buy')
+        .reduce((total, log) => total + log.amount, 0);
+    }
+    function timeAgo(iso) {
+      const minutes = Math.floor((Date.now() - new Date(iso)) / 60000);
+      if (minutes < 1) return 'just now';
+      if (minutes < 60) return minutes + 'm ago';
+      if (minutes < 24 * 60) return Math.floor(minutes / 60) + 'h ago';
+      if (minutes < 48 * 60) return 'yesterday';
+      return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+
+    // ---------- 11. Layar Home ----------
+    function renderHome() {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      // Bandingkan dengan TITIK YANG SAMA bulan lalu (tgl 12 vs tgl 12),
+      // supaya setengah bulan tidak dibandingkan dengan sebulan penuh.
+      const daysInLastMonth = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+      const samePointLastMonth = new Date(
+        now.getFullYear(), now.getMonth() - 1,
+        Math.min(now.getDate(), daysInLastMonth), now.getHours(), now.getMinutes()
+      );
+
+      const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const monthLogs = logsBetween(monthStart, nextMonthStart);
+      const spend = sumBuys(monthLogs);
+      const lastSpend = sumBuys(logsBetween(lastMonthStart, samePointLastMonth));
+
+      $('stat-spend').textContent = rupiah(spend);
+      if (lastSpend === 0) {
+        $('stat-spend-note').textContent = 'Money that actually left your wallet';
+      } else {
+        const change = Math.round((spend - lastSpend) / lastSpend * 100);
+        $('stat-spend-note').textContent =
+          (change <= 0 ? '▼ ' : '▲ ') + Math.abs(change) + '% vs same point last month (' + rupiah(lastSpend) + ')';
+      }
+
+      const skips = monthLogs.filter((log) => log.decision === 'skip').length;
+      $('stat-skiprate').textContent = monthLogs.length ? Math.round(skips / monthLogs.length * 100) + '%' : '–';
+      $('stat-skiprate-note').textContent = monthLogs.length
+        ? skips + ' of ' + monthLogs.length + ' urges'
+        : 'Urges you said no to';
+
+      const weekStart = startOfWeek(now);
+      $('stat-urges').textContent = logsBetween(weekStart, addDays(weekStart, 7)).length;
+      $('stat-urges-note').textContent = 'Last week: ' + logsBetween(addDays(weekStart, -7), weekStart).length;
+
+      const stashed = state.logs.reduce((total, log) => total + (log.stashed || 0), 0);
+      $('stat-stashed').textContent = rupiah(stashed);
+
+      renderWaiting();
+      renderRecent();
+    }
+
+    function renderRecent() {
+      const recent = state.logs.slice(-8).reverse();   // 8 terakhir, terbaru di atas
+      if (!recent.length) {
+        $('recent-list').innerHTML = '<li class="empty">No logs yet. Tap the big button when an urge hits.</li>';
+        return;
+      }
+      // Template literal `...${nilai}...` = cara praktis menyusun HTML dari data
+      $('recent-list').innerHTML = recent.map((log) => {
+        const cat = CATEGORY[log.category];
+        const meta = [timeAgo(log.date)];
+        if (log.amount) meta.push(rupiah(log.amount));
+        if (log.stashed) meta.push('stashed ' + rupiah(log.stashed));
+        const canStash = log.decision === 'skip' && !log.stashed;
+        return `
+          <li class="log-row">
+            <span class="log-emoji" aria-hidden="true">${cat.emoji}</span>
+            <span class="log-main">
+              <span class="log-title">${escapeHtml(log.item || cat.name)}</span>
+              <span class="log-meta">${meta.join(', ')}</span>
+            </span>
+            <span class="stamp stamp-${log.decision}">${log.decision === 'skip' ? 'Nope' : 'Bought'}</span>
+            ${canStash ? `<button type="button" class="icon-btn" data-action="stash" data-id="${log.id}" aria-label="Stash money">💰</button>` : ''}
+            <button type="button" class="icon-btn" data-action="delete" data-id="${log.id}" aria-label="Delete log">✕</button>
+          </li>`;
+      }).join('');
+    }
+
+    // Satu "pendengar" untuk semua tombol di daftar (event delegation)
+    $('recent-list').addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-action]');
+      if (!btn) return;
+      const log = state.logs.find((l) => l.id === btn.dataset.id);
+      if (!log) return;
+      if (btn.dataset.action === 'stash') openStashSheet(log);
+      if (btn.dataset.action === 'delete') {
+        askConfirm('Delete this log?', 'Delete', () => {
+          state.logs = state.logs.filter((l) => l.id !== log.id);
+          saveState();
+          renderHome();
+          showToast('Log deleted.');
+        });
+      }
+    });
+
+    // ---------- 12. Confetti 🎉 ----------
+    function celebrate() {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const colors = ['#FF7AB6', '#FFE45C', '#46E3A5', '#7CC8FF', '#FF5A4E'];
+      for (let i = 0; i < 60; i++) {
+        const piece = document.createElement('span');
+        piece.className = 'confetti';
+        piece.style.left = Math.random() * 100 + 'vw';
+        piece.style.background = colors[i % colors.length];
+        piece.style.animationDelay = Math.random() * 0.3 + 's';
+        piece.style.setProperty('--drift', (Math.random() * 120 - 60) + 'px');
+        document.body.appendChild(piece);
+        setTimeout(() => piece.remove(), 2300);   // bersihkan setelah jatuh
+      }
+    }
+
+    /* =====================================================================
+       Tahap 5: THINK IT THROUGH + WAITING ROOM
+       ===================================================================== */
+
+    // ---------- 13. Isi tiap langkah ----------
+    const THINK_TITLES = [
+      'How strong is the urge?',
+      'How are you feeling right now?',
+      'Why buy it? Why not?',
+      'Do you already own something that does the same job?',
+      "Here's the verdict"
+    ];
+    const HEAVY_FEELINGS = ['bored', 'stressed', 'tired', 'sad', 'fomo'];
+    const TIMER_SECONDS = 180;   // 3 menit
+
+    let think = {};        // jawaban sementara
+    let thinkStep = 1;     // langkah yang sedang tampil
+    let timerId = null;    // id penghitung waktu, untuk menghentikannya nanti
+
+    // Dari lembar log → buka Think it through
+    $('btn-think').addEventListener('click', () => {
+      if (!draft.category) {
+        showToast('Pick a category first.');
+        return;
+      }
+      stopTimer();   // hentikan sisa penghitung waktu dari percobaan sebelumnya
+      think = {
+        category: draft.category,
+        item: $('log-item').value.trim(),
+        amount: Number($('log-amount').value) || 0,
+        urge: null, feeling: null, owns: null,
+        secondsLeft: TIMER_SECONDS, timerSkipped: false
+      };
+      // kosongkan isian dari percobaan sebelumnya
+      ['think-for', 'think-against', 'think-own-what', 'verdict-amount'].forEach((id) => { $(id).value = ''; });
+      ['think-urge', 'think-feeling', 'think-own'].forEach((id) => selectChip(id, null));
+      const cat = CATEGORY[think.category];
+      $('think-item').textContent = cat.emoji + ' ' + (think.item || cat.name) +
+        (think.amount ? ', ' + rupiah(think.amount) : '');
+      closeSheet('log-sheet');
+      goToStep(1);
+      openSheet('think-sheet');
+    });
+
+    // Pilihan chip di langkah 1, 2, 4
+    function chipPicker(groupId, key) {
+      $(groupId).addEventListener('click', (event) => {
+        const chip = event.target.closest('.chip');
+        if (!chip) return;
+        think[key] = chip.dataset.value;
+        selectChip(groupId, think[key]);
+      });
+    }
+    chipPicker('think-urge', 'urge');
+    chipPicker('think-feeling', 'feeling');
+    chipPicker('think-own', 'owns');
+
+    // ---------- 14. Pindah langkah ----------
+    function goToStep(n) {
+      thinkStep = n;
+      document.querySelectorAll('#think-sheet .step').forEach((step) => {
+        step.hidden = Number(step.dataset.step) !== n;
+      });
+      $('think-count').textContent = 'Step ' + n + ' of 5';
+      $('think-title').textContent = THINK_TITLES[n - 1];
+      $('think-back').disabled = n === 1;
+      $('think-nav').hidden = n === 5;    // di langkah 5 yang tampil tombol keputusan
+      if (n === 3) startTimer();
+      if (n === 5) showVerdict();
+      updateNextButton();
+    }
+
+    function updateNextButton() {
+      const timerRunning = thinkStep === 3 && think.secondsLeft > 0 && !think.timerSkipped;
+      $('think-next').disabled = timerRunning;
+      $('think-next').textContent = timerRunning ? 'Keep writing…' : 'Next';
+    }
+
+    $('think-back').addEventListener('click', () => goToStep(thinkStep - 1));
+    $('verdict-back').addEventListener('click', () => goToStep(4));
+
+    $('think-next').addEventListener('click', () => {
+      // periksa jawaban langkah ini sebelum lanjut
+      if (thinkStep === 1 && !think.urge) return showToast('Pick a number from 1 to 5.');
+      if (thinkStep === 2 && !think.feeling) return showToast('Pick the closest feeling.');
+      if (thinkStep === 4 && !think.owns) return showToast('Pick Yes, Kind of, or No.');
+      goToStep(thinkStep + 1);
+    });
+
+    // ---------- 15. Penghitung waktu 3 menit ----------
+    function startTimer() {
+      if (timerId || think.secondsLeft <= 0) return showTime();   // sudah jalan / sudah selesai
+      showTime();
+      timerId = setInterval(() => {      // jalankan isi ini setiap 1000 ms = 1 detik
+        think.secondsLeft--;
+        showTime();
+        if (think.secondsLeft <= 0) stopTimer();
+      }, 1000);
+    }
+    function stopTimer() {
+      clearInterval(timerId);
+      timerId = null;
+      updateNextButton();
+    }
+    function showTime() {
+      const s = Math.max(0, think.secondsLeft);
+      $('think-timer').textContent = s > 0 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : 'Done ✓';
+      $('think-timer').classList.toggle('done', s === 0);
+      updateNextButton();
+    }
+    $('think-skip-timer').addEventListener('click', () => {
+      think.timerSkipped = true;
+      stopTimer();
+    });
+    // Kalau lembar ditutup, hentikan penghitung waktu
+    $('think-sheet').addEventListener('click', (event) => {
+      if (event.target === $('think-sheet') || event.target.closest('[data-close]')) stopTimer();
+    });
+
+    // ---------- 16. Menentukan saran ----------
+    function suggest(t) {
+      if (t.owns === 'yes') {
+        return { pick: 'skip', why: 'You already have something that does this job.' };
+      }
+      if (t.reasonsAgainst.length > t.reasonsFor.length) {
+        return { pick: 'skip', why: 'You wrote more reasons against it than for it.' };
+      }
+      if (Number(t.urge) >= 4 || HEAVY_FEELINGS.includes(t.feeling) || t.owns === 'kind') {
+        return { pick: 'wait', why: 'Strong urges and heavy feelings fade with time. Let it cool off first.' };
+      }
+      return { pick: 'buy', why: 'Calm, thought through, and nothing at home does this job. If it fits your budget, it can be a planned buy.' };
+    }
+
+    function showVerdict() {
+      stopTimer();
+      think.reasonsFor = $('think-for').value.split('\n').map((l) => l.trim()).filter(Boolean);
+      think.reasonsAgainst = $('think-against').value.split('\n').map((l) => l.trim()).filter(Boolean);
+      think.ownsWhat = $('think-own-what').value.trim();
+      think.suggestion = suggest(think);
+
+      $('think-verdict').innerHTML =
+        '<b>' + { skip: '✋ Skip it', wait: '⏳ Wait it out', buy: '🛒 It looks planned' }[think.suggestion.pick] + '</b>' +
+        '<p>' + think.suggestion.why + '</p>' +
+        '<p class="hint" style="margin:6px 0 0">' + think.reasonsFor.length + ' reasons for, ' +
+        think.reasonsAgainst.length + ' against. You still make the call.</p>';
+
+      // Tombol yang disarankan diberi warna + label "Suggested"
+      ['skip', 'wait', 'buy'].forEach((pick) => {
+        const btn = $('verdict-' + pick);
+        const on = pick === think.suggestion.pick;
+        btn.classList.toggle('suggested', on);
+        btn.classList.toggle(btn.dataset.color, on);
+        btn.classList.toggle('btn-plain', !on);
+      });
+      $('verdict-wait').textContent = '⏳ Wait ' + state.settings.waitHours + 'h';
+      $('verdict-amount-wrap').hidden = think.amount > 0;   // tanya harga kalau belum diisi
+    }
+
+    // Jawaban yang disimpan bersama catatan (tanpa data sementara seperti timer)
+    function thinkRecord() {
+      return {
+        urge: Number(think.urge), feeling: think.feeling,
+        reasonsFor: think.reasonsFor, reasonsAgainst: think.reasonsAgainst,
+        owns: think.owns, ownsWhat: think.ownsWhat,
+        suggested: think.suggestion.pick, timerSkipped: think.timerSkipped
+      };
+    }
+
+    // Harga wajib untuk Wait & Buy
+    function thinkAmountOrAsk() {
+      if (think.amount > 0) return think.amount;
+      const n = Number($('verdict-amount').value) || 0;
+      if (n <= 0) {
+        showToast('Add how much it costs first.');
+        $('verdict-amount').focus();
+        return 0;
+      }
+      return n;
+    }
+
+    // ---------- 17. Tiga tombol keputusan ----------
+    $('verdict-skip').addEventListener('click', () => {
+      const amount = think.amount || Number($('verdict-amount').value) || 0;
+      const log = addLog({ category: think.category, item: think.item, amount, decision: 'skip', think: thinkRecord() });
+      closeSheet('think-sheet');
+      celebrate();
+      openStashSheet(log);
+    });
+
+    $('verdict-buy').addEventListener('click', () => {
+      const amount = thinkAmountOrAsk();
+      if (!amount) return;
+      addLog({ category: think.category, item: think.item, amount, decision: 'buy', planned: true, think: thinkRecord() });
+      closeSheet('think-sheet');
+      showToast('Logged as a planned buy.');
+    });
+
+    $('verdict-wait').addEventListener('click', () => {
+      const amount = thinkAmountOrAsk();
+      if (!amount) return;
+      const hours = state.settings.waitHours;
+      state.waits.push({
+        id: makeId(),
+        createdAt: new Date().toISOString(),
+        until: Date.now() + hours * 60 * 60 * 1000,   // jam → milidetik
+        category: think.category,
+        item: think.item,
+        amount,
+        think: thinkRecord()
+      });
+      saveState();
+      closeSheet('think-sheet');
+      renderHome();
+      showToast('In the waiting room. Check back in ' + hours + 'h.');
+    });
+
+    // ---------- 18. Waiting room di Home ----------
+    function timeLeft(ms) {
+      const minutes = Math.ceil(ms / 60000);
+      if (minutes < 60) return minutes + 'm left';
+      return Math.floor(minutes / 60) + 'h ' + (minutes % 60) + 'm left';
+    }
+
+    function renderWaiting() {
+      if (!state.waits.length) {
+        $('waiting-list').innerHTML = '<p class="empty">Nothing cooling off right now.</p>';
+        return;
+      }
+      const waits = [...state.waits].sort((a, b) => a.until - b.until);  // yang paling dekat di atas
+      $('waiting-list').innerHTML = waits.map((w) => {
+        const ready = Date.now() >= w.until;
+        const cat = CATEGORY[w.category];
+        return `
+          <div class="wait-card ${ready ? 'ready' : ''}">
+            <div class="wait-top">
+              <span aria-hidden="true">${cat.emoji}</span>
+              <span class="grow">${escapeHtml(w.item || cat.name)}</span>
+              <span>${rupiah(w.amount)}</span>
+            </div>
+            <p class="wait-time">${ready ? "⏰ Time's up. Still want it?" : '⏳ ' + timeLeft(w.until - Date.now())}</p>
+            <div class="wait-actions">
+              <button type="button" class="btn btn-sm btn-skip" data-wait="skip" data-id="${w.id}">${ready ? '✋ No, skip it' : '✋ Skip now'}</button>
+              <button type="button" class="btn btn-sm btn-plain" data-wait="buy" data-id="${w.id}">${ready ? '🛒 Yes, I bought it' : '🛒 Bought it anyway'}</button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    $('waiting-list').addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-wait]');
+      if (!btn) return;
+      const w = state.waits.find((x) => x.id === btn.dataset.id);
+      if (!w) return;
+      state.waits = state.waits.filter((x) => x.id !== w.id);   // keluarkan dari waiting room
+      const log = addLog({
+        category: w.category, item: w.item, amount: w.amount,
+        decision: btn.dataset.wait, think: w.think, fromWait: true,
+        planned: btn.dataset.wait === 'buy' && Date.now() >= w.until
+      });
+      if (btn.dataset.wait === 'skip') {
+        celebrate();
+        openStashSheet(log);
+      } else {
+        showToast('Logged. Being honest counts too.');
+      }
+    });
+
+    /* =====================================================================
+       Tahap 6: GRID SETAHUN & STATISTIK
+       ===================================================================== */
+
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const FEELINGS = {
+      bored: '😐 Bored', stressed: '😣 Stressed', tired: '😴 Tired', sad: '😢 Sad',
+      fomo: '🔥 FOMO / promo', hungry: '🍜 Hungry', happy: '🎉 Happy'
+    };
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    // Tanggal → teks "2026-11-12" menurut jam HP (bukan jam London/UTC)
+    function dayKey(d) {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    // Berapa hari antara dua tanggal (dibulatkan)
+    function daysBetween(a, b) {
+      return Math.round((b - a) / DAY_MS);
+    }
+    // 1250000 → "1.3M", 450000 → "450K" (untuk label kecil di grafik)
+    function compactRp(n) {
+      if (n >= 1e6) return (n / 1e6).toFixed(1).replace('.0', '') + 'M';
+      if (n >= 1e3) return Math.round(n / 1e3) + 'K';
+      return String(n);
+    }
+    // Kunci dengan angka terbesar, misalnya { food: 5, shopping: 2 } → 'food'
+    function topKey(counts) {
+      let best = null;
+      Object.keys(counts).forEach((k) => {
+        if (best === null || counts[k] > counts[best]) best = k;
+      });
+      return best;
+    }
+
+    function renderStats() {
+      renderYearGrids();
+      renderPatterns();
+      renderMonthChart();
+      renderWeekChart();
+    }
+
+    // ---------- 20. Grid setahun: 1 kotak = 1 hari ----------
+    let dayCounts = {};   // contoh: dayCounts['food|2026-11-12'] = { skip: 1, buy: 0, spend: 0 }
+
+    function renderYearGrids() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const todayKey = dayKey(now);
+
+      dayCounts = {};
+      state.logs.forEach((log) => {
+        const k = log.category + '|' + dayKey(new Date(log.date));
+        dayCounts[k] = dayCounts[k] || { skip: 0, buy: 0, spend: 0 };
+        dayCounts[k][log.decision]++;
+        if (log.decision === 'buy') dayCounts[k].spend += log.amount;
+      });
+
+      // Grid dimulai dari Senin pada/sebelum 1 Januari, diakhiri Minggu pada/sesudah 31 Desember
+      const gridStart = startOfWeek(new Date(year, 0, 1));
+      const totalDays = daysBetween(gridStart, addDays(startOfWeek(new Date(year, 11, 31)), 7));
+      const todayColumn = Math.floor(daysBetween(gridStart, now) / 7);
+
+      // Label bulan diletakkan di kolom (minggu) tempat tanggal 1 berada
+      const monthLabels = MONTHS.map((name, m) => {
+        const col = Math.floor(daysBetween(gridStart, new Date(year, m, 1)) / 7);
+        return `<span style="grid-column: ${col + 1} / span 3">${name}</span>`;
+      }).join('');
+
+      $('grids').innerHTML = Object.keys(CATEGORY).map((cat) => {
+        let cells = '';
+        let skipDays = 0, buyDays = 0;
+        for (let i = 0; i < totalDays; i++) {
+          const d = addDays(gridStart, i);
+          const key = dayKey(d);
+          const info = dayCounts[cat + '|' + key];
+          let cls = 'day';
+          if (d.getFullYear() !== year) cls += ' out';
+          else if (key > todayKey) cls += ' future';
+          else if (info && info.skip && info.buy) cls += ' mixed';
+          else if (info && info.buy) cls += ' buy';
+          else if (info) cls += ' skip';
+          if (key === todayKey) cls += ' today';
+          if (info && info.buy) buyDays++;
+          if (info && info.skip && !info.buy) skipDays++;
+          cells += `<span class="${cls}" data-day="${key}" data-cat="${cat}"></span>`;
+        }
+        return `
+          <div class="year-card">
+            <p class="year-title">${CATEGORY[cat].emoji} ${CATEGORY[cat].name}</p>
+            <div class="year-scroll">
+              <div class="year-months">${monthLabels}</div>
+              <div class="year-grid" role="img"
+                   aria-label="${CATEGORY[cat].name} in ${year}: ${skipDays} skip-only days, ${buyDays} days with a purchase">${cells}</div>
+            </div>
+          </div>`;
+      }).join('');
+
+      // Geser grid supaya minggu ini terlihat
+      document.querySelectorAll('.year-scroll').forEach((box) => {
+        box.scrollLeft = todayColumn * 14 - box.clientWidth + 70;
+      });
+    }
+
+    // Ketuk satu kotak → tampilkan isinya
+    $('grids').addEventListener('click', (event) => {
+      const cell = event.target.closest('.day');
+      if (!cell || cell.classList.contains('out')) return;
+      document.querySelectorAll('.day.picked').forEach((c) => c.classList.remove('picked'));
+      cell.classList.add('picked');
+      const info = dayCounts[cell.dataset.cat + '|' + cell.dataset.day];
+      const label = new Date(cell.dataset.day + 'T00:00')
+        .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      const cat = CATEGORY[cell.dataset.cat].name;
+      $('grid-readout').textContent = !info
+        ? label + ', ' + cat + ': no logs'
+        : label + ', ' + cat + ': ' + info.skip + ' skipped, ' + info.buy + ' bought' +
+          (info.spend ? ' (' + rupiah(info.spend) + ')' : '');
+    });
+
+    // ---------- 21. Pola ----------
+    function renderPatterns() {
+      const now = new Date();
+      const catCount = {}, feelCount = {}, dayCount = {};
+      logsBetween(addDays(now, -30), addDays(now, 1)).forEach((log) => {
+        catCount[log.category] = (catCount[log.category] || 0) + 1;
+      });
+      state.logs.forEach((log) => {
+        if (log.think && log.think.feeling) feelCount[log.think.feeling] = (feelCount[log.think.feeling] || 0) + 1;
+        const weekday = (new Date(log.date).getDay() + 6) % 7;   // Senin = 0
+        dayCount[weekday] = (dayCount[weekday] || 0) + 1;
+      });
+      const topCat = topKey(catCount);
+      const topFeel = topKey(feelCount);
+      const topDay = topKey(dayCount);
+      const skips = state.logs.filter((log) => log.decision === 'skip').length;
+
+      const tiles = [
+        ['Top trigger (30 days)',
+          topCat ? CATEGORY[topCat].emoji + ' ' + CATEGORY[topCat].name : '–',
+          topCat ? catCount[topCat] + ' urges' : 'No logs in the last 30 days'],
+        ['Most common feeling',
+          topFeel ? FEELINGS[topFeel] : '–',
+          topFeel ? feelCount[topFeel] + ' times' : 'Appears after Think it through'],
+        ['Busiest day',
+          topDay !== null ? WEEKDAYS[topDay] : '–',
+          topDay !== null ? dayCount[topDay] + ' urges in total' : 'No logs yet'],
+        ['Skip rate (all time)',
+          state.logs.length ? Math.round(skips / state.logs.length * 100) + '%' : '–',
+          skips + ' of ' + state.logs.length + ' urges']
+      ];
+      $('patterns').innerHTML = tiles.map(([label, value, note]) => `
+        <div class="pattern">
+          <p class="stat-label">${label}</p>
+          <p class="stat-value">${value}</p>
+          <p class="stat-note">${note}</p>
+        </div>`).join('');
+    }
+
+    // ---------- 22. Grafik batang serbaguna ----------
+    // cols = [{ segments: [{ cls, value }], axis: 'Nov', valueLabel: '450K', now: true }]
+    function drawBars(containerId, cols) {
+      const PLOT_HEIGHT = 120;   // tinggi batang tertinggi, dalam px
+      const totals = cols.map((c) => c.segments.reduce((sum, s) => sum + s.value, 0));
+      const max = Math.max(1, ...totals);
+      const bars = cols.map((c, i) => {
+        const segs = c.segments
+          .filter((s) => s.value > 0)
+          .map((s) => `<div class="seg ${s.cls}" style="height:${Math.max(3, s.value / max * PLOT_HEIGHT)}px"></div>`)
+          .join('');
+        return `<div class="bar-col" data-i="${i}">
+                  <span class="bar-value">${c.valueLabel || ''}</span>
+                  <div class="stack">${segs}</div>
+                </div>`;
+      }).join('');
+      const axis = cols.map((c) => `<span class="${c.now ? 'now' : ''}">${c.axis}</span>`).join('');
+      $(containerId).innerHTML = `<div class="bars">${bars}</div><div class="bar-axis">${axis}</div>`;
+    }
+
+    // Ketuk/arahkan ke batang → teks penjelasan di bawah grafik
+    function chartReadout(containerId, readoutId, describe) {
+      const handler = (event) => {
+        const col = event.target.closest('.bar-col');
+        if (!col) return;
+        $(containerId).querySelectorAll('.bar-col').forEach((c) => c.classList.toggle('active', c === col));
+        $(readoutId).textContent = describe(Number(col.dataset.i));
+      };
+      $(containerId).addEventListener('click', handler);
+      $(containerId).addEventListener('mouseover', handler);
+    }
+
+    // ---------- 23. Impulse spend per bulan ----------
+    let monthTotals = [];
+    function renderMonthChart() {
+      const now = new Date();
+      const year = now.getFullYear();
+      monthTotals = MONTHS.map((_, m) => sumBuys(logsBetween(new Date(year, m, 1), new Date(year, m + 1, 1))));
+      const maxIndex = monthTotals.indexOf(Math.max(...monthTotals));
+      // Label angka hanya di bulan ini dan bulan tertinggi, supaya tidak ramai
+      drawBars('chart-months', monthTotals.map((total, m) => ({
+        segments: [{ cls: 'seg-buy', value: total }],
+        axis: MONTHS[m][0],
+        valueLabel: total > 0 && (m === now.getMonth() || m === maxIndex) ? compactRp(total) : '',
+        now: m === now.getMonth()
+      })));
+      $('months-readout').textContent = monthTotals.some((t) => t > 0)
+        ? 'Tap a bar for the amount.'
+        : 'No purchases logged in ' + year + ' yet.';
+      $('table-months').innerHTML = '<tr><th>Month</th><th class="num">Spent on urges</th></tr>' +
+        monthTotals.map((t, m) => `<tr><td>${MONTHS[m]} ${year}</td><td class="num">${rupiah(t)}</td></tr>`).join('');
+    }
+    chartReadout('chart-months', 'months-readout', (i) =>
+      MONTHS[i] + ' ' + new Date().getFullYear() + ': ' + rupiah(monthTotals[i]) + ' spent on urges');
+
+    // ---------- 24. Dorongan per minggu (8 minggu terakhir) ----------
+    let weekData = [];
+    function renderWeekChart() {
+      const thisWeek = startOfWeek(new Date());
+      weekData = [];
+      for (let i = 7; i >= 0; i--) {
+        const start = addDays(thisWeek, -7 * i);
+        const logs = logsBetween(start, addDays(start, 7));
+        weekData.push({
+          start,
+          skip: logs.filter((log) => log.decision === 'skip').length,
+          buy: logs.filter((log) => log.decision === 'buy').length
+        });
+      }
+      drawBars('chart-weeks', weekData.map((w, i) => ({
+        segments: [{ cls: 'seg-skip', value: w.skip }, { cls: 'seg-buy', value: w.buy }],
+        axis: w.start.getDate() + ' ' + MONTHS[w.start.getMonth()],
+        valueLabel: i === weekData.length - 1 ? String(w.skip + w.buy) : '',
+        now: i === weekData.length - 1
+      })));
+      $('table-weeks').innerHTML = '<tr><th>Week of</th><th class="num">Skipped</th><th class="num">Bought</th></tr>' +
+        weekData.map((w) => `<tr><td>${w.start.getDate()} ${MONTHS[w.start.getMonth()]}</td><td class="num">${w.skip}</td><td class="num">${w.buy}</td></tr>`).join('');
+    }
+    chartReadout('chart-weeks', 'weeks-readout', (i) => {
+      const w = weekData[i];
+      return 'Week of ' + w.start.getDate() + ' ' + MONTHS[w.start.getMonth()] + ': ' +
+        (w.skip + w.buy) + ' urges, ' + w.skip + ' skipped, ' + w.buy + ' bought';
+    });
+
+    /* =====================================================================
+       Tahap 7: TOKO PURA-PURA (BFFR Mall & BFFR Eats)
+       Semua yang terjadi di sini TIDAK masuk ke catatan & statistik.
+       ===================================================================== */
+
+    // ---------- 25. Katalog contoh. HARGA REKAAN, bukan harga pasar. ----------
+    const CATALOG = [
+      { id: 'c-m1',  store: 'mall', name: 'Wireless earbuds',      price: 299000, emoji: '🎧', bg: '#7CC8FF', flash: 30 },
+      { id: 'c-m2',  store: 'mall', name: 'Oversized hoodie',      price: 189000, emoji: '🧥', bg: '#FFB3D4' },
+      { id: 'c-m3',  store: 'mall', name: 'Chunky sneakers',       price: 459000, emoji: '👟', bg: '#FFE45C', flash: 20 },
+      { id: 'c-m4',  store: 'mall', name: 'Skincare starter set',  price: 149000, emoji: '🧴', bg: '#B8F2D9' },
+      { id: 'c-m5',  store: 'mall', name: 'Smartwatch',            price: 649000, emoji: '⌚', bg: '#D7CCFF' },
+      { id: 'c-m6',  store: 'mall', name: 'Aesthetic desk lamp',   price: 99000,  emoji: '💡', bg: '#FFE45C' },
+      { id: 'c-m7',  store: 'mall', name: 'Canvas tote bag',       price: 79000,  emoji: '👜', bg: '#FFD3B0' },
+      { id: 'c-m8',  store: 'mall', name: 'Clear phone case',      price: 49000,  emoji: '📱', bg: '#7CC8FF', flash: 50 },
+      { id: 'c-m9',  store: 'mall', name: 'Mechanical keyboard',   price: 550000, emoji: '⌨️', bg: '#B8F2D9' },
+      { id: 'c-m10', store: 'mall', name: 'Giant plushie',         price: 89000,  emoji: '🧸', bg: '#FFB3D4' },
+      { id: 'c-e1',  store: 'eats', name: 'Iced palm sugar latte', price: 28000,  emoji: '☕', bg: '#FFD3B0', flash: 20 },
+      { id: 'c-e2',  store: 'eats', name: 'Brown sugar boba',      price: 25000,  emoji: '🧋', bg: '#FFE45C' },
+      { id: 'c-e3',  store: 'eats', name: 'Fried chicken + rice',  price: 32000,  emoji: '🍗', bg: '#FFB3D4' },
+      { id: 'c-e4',  store: 'eats', name: 'Martabak manis',        price: 45000,  emoji: '🥞', bg: '#FFE45C' },
+      { id: 'c-e5',  store: 'eats', name: 'Large pizza',           price: 89000,  emoji: '🍕', bg: '#FFD3B0', flash: 30 },
+      { id: 'c-e6',  store: 'eats', name: 'Spicy ramen',           price: 55000,  emoji: '🍜', bg: '#7CC8FF' },
+      { id: 'c-e7',  store: 'eats', name: 'Double cheeseburger',   price: 42000,  emoji: '🍔', bg: '#B8F2D9' },
+      { id: 'c-e8',  store: 'eats', name: 'Seblak level 5',        price: 20000,  emoji: '🌶️', bg: '#FFB3D4' },
+      { id: 'c-e9',  store: 'eats', name: 'Butter croissant',      price: 30000,  emoji: '🥐', bg: '#D7CCFF' },
+      { id: 'c-e10', store: 'eats', name: 'Glazed donuts (6)',     price: 36000,  emoji: '🍩', bg: '#B8F2D9' }
+    ];
+    const ICONS = {
+      mall: ['🎁', '👗', '👟', '🎧', '📱', '💄', '🧸', '👜'],
+      eats: ['🍔', '🧋', '🍰', '🍕', '☕', '🍜', '🍗', '🍩']
+    };
+    const SHIPPING = { mall: 10000, eats: 8000 };
+    const VOUCHERS = [
+      { code: 'FREESHIP', text: 'Free delivery' },
+      { code: 'BROKE10', text: '10% off, max Rp25.000' }
+    ];
+    const PAYMENTS = ['BFFR Pay', 'Cash on delivery'];
+    // Tahap pengantaran: [bagian dari total waktu (0–1), tulisan]
+    const TRACK = {
+      eats: [[0, 'Order confirmed'], [0.1, 'Restaurant is preparing your food'], [0.5, 'Driver picked up your order'],
+             [0.55, 'Driver is on the way'], [0.9, 'Driver is almost there'], [1, 'Arrived! Enjoy 🎉']],
+      mall: [[0, 'Order placed'], [0.04, 'Seller is packing your order'], [0.12, 'Handed to the courier'],
+             [0.3, 'In transit to the sorting center'], [0.65, 'Arrived at your city hub'], [0.85, 'Out for delivery'],
+             [1, 'Delivered! 🎉']]
+    };
+
+    let shopTab = 'mall';
+
+    function allProducts() { return [...state.wishlist, ...CATALOG]; }   // barang sendiri di depan
+    function findProduct(id) { return allProducts().find((p) => p.id === id); }
+    function salePrice(p) {
+      return p.flash ? Math.round(p.price * (1 - p.flash / 100) / 100) * 100 : p.price;
+    }
+    // Gambar produk: potongan screenshot kalau ada, kalau tidak emoji
+    function productVisual(p) {
+      return p.imageId ? `<img data-img="${p.imageId}" alt="${escapeHtml(p.name)}">` : (p.emoji || '🎁');
+    }
+
+    // Flash sale berganti setiap 3 jam
+    function flashEndsIn() {
+      const period = 3 * 60 * 60 * 1000;
+      const ms = period - (Date.now() % period);
+      return [ms / 3600000, (ms % 3600000) / 60000, (ms % 60000) / 1000]
+        .map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
+    }
+
+    // ---------- 26. Layar toko ----------
+    function renderShop() {
+      document.querySelectorAll('.shop-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === shopTab));
+      const waiting = state.waits.length;
+      $('cooling-note').hidden = waiting === 0;
+      $('cooling-note').textContent = '⏳ ' + waiting + (waiting > 1 ? ' things' : ' thing') +
+        ' in the waiting room. Browsing more stuff can keep the urge alive.';
+      $('orders-badge').textContent = state.orders.filter((o) => !o.received).length || '';
+      if (shopTab === 'orders') renderOrders();
+      else renderStore(shopTab);
+      updateCartFab();
+    }
+
+    $('shop-tabs').addEventListener('click', (event) => {
+      const tab = event.target.closest('.shop-tab');
+      if (!tab) return;
+      shopTab = tab.dataset.tab;
+      renderShop();
+    });
+
+    function renderStore(store) {
+      const products = allProducts().filter((p) => p.store === store);
+      $('shop-content').innerHTML = `
+        <div class="flash-strip">
+          <span>⚡ Flash sale</span>
+          <span>ends in <span class="flash-time" id="flash-time">${flashEndsIn()}</span></span>
+        </div>
+        <div class="voucher-row">
+          ${VOUCHERS.map((v) => `<span class="voucher"><b>${v.code}</b>${v.text}</span>`).join('')}
+        </div>
+        <p class="hint" style="margin:0 0 10px">Catalog prices are made-up samples.</p>
+        <div class="product-grid">
+          <button type="button" class="add-tile" data-shop="shot"><span aria-hidden="true">📸</span>Add from a screenshot</button>
+          <button type="button" class="add-tile" data-shop="add"><span aria-hidden="true">✍️</span>Type it in</button>
+          ${products.map(productCard).join('')}
+        </div>`;
+      hydrateImages($('shop-content'));
+    }
+
+    function productCard(p) {
+      const mine = p.id.startsWith('w-');
+      const tagText = (p.flash ? '⚡ ' + p.flash + '% off, ' : '') + (mine ? 'your item' : 'sample price');
+      return `
+        <div class="product">
+          <div class="product-img" style="background:${p.bg || '#FFFFFF'}">${productVisual(p)}</div>
+          <div class="product-body">
+            <span class="product-name">${escapeHtml(p.name)}</span>
+            <span><span class="price">${rupiah(salePrice(p))}</span>${p.flash ? `<span class="strike">${rupiah(p.price)}</span>` : ''}</span>
+            <span class="tag ${p.flash ? 'tag-flash' : ''}">${tagText}</span>
+            <div class="product-actions">
+              <button type="button" class="add-btn" data-shop="cart" data-id="${p.id}">+ Cart</button>
+              ${mine ? `<button type="button" class="icon-btn" data-shop="remove" data-id="${p.id}" aria-label="Remove item">🗑️</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Semua tombol di dalam toko didengarkan dari satu tempat
+    $('shop-content').addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-shop]');
+      if (!btn) return;
+      const action = btn.dataset.shop;
+      if (action === 'add') openItemSheet();
+      if (action === 'shot') openShotSheet();
+      if (action === 'cart') addToCart(btn.dataset.id);
+      if (action === 'remove') removeWishItem(btn.dataset.id);
+      if (action === 'received') markReceived(btn.dataset.id);
+      if (action === 'clear') clearReceived();
+    });
+
+    // ---------- 27. Barang incaran sendiri ----------
+    let itemDraft = {};
+    function openItemSheet() {
+      itemDraft = { store: shopTab === 'eats' ? 'eats' : 'mall', emoji: null };
+      $('item-name').value = '';
+      $('item-price').value = '';
+      selectChip('item-store', itemDraft.store);
+      renderIconChoices();
+      openSheet('item-sheet');
+    }
+    function renderIconChoices() {
+      itemDraft.emoji = ICONS[itemDraft.store][0];
+      $('item-emoji').innerHTML = ICONS[itemDraft.store]
+        .map((e) => `<button type="button" class="chip ${e === itemDraft.emoji ? 'selected' : ''}" data-value="${e}">${e}</button>`)
+        .join('');
+    }
+    $('item-store').addEventListener('click', (event) => {
+      const chip = event.target.closest('.chip');
+      if (!chip) return;
+      itemDraft.store = chip.dataset.value;
+      selectChip('item-store', itemDraft.store);
+      renderIconChoices();
+    });
+    $('item-emoji').addEventListener('click', (event) => {
+      const chip = event.target.closest('.chip');
+      if (!chip) return;
+      itemDraft.emoji = chip.dataset.value;
+      selectChip('item-emoji', itemDraft.emoji);
+    });
+    $('item-save').addEventListener('click', () => {
+      const name = $('item-name').value.trim();
+      const price = Number($('item-price').value) || 0;
+      if (!name) return showToast('Give it a name.');
+      if (price <= 0) return showToast('Add the price.');
+      state.wishlist.unshift({
+        id: 'w-' + makeId(), store: itemDraft.store, name, price,
+        emoji: itemDraft.emoji, bg: '#FFFFFF', createdAt: new Date().toISOString()
+      });
+      saveState();
+      closeSheet('item-sheet');
+      shopTab = itemDraft.store;
+      renderShop();
+      showToast('Added to ' + (itemDraft.store === 'mall' ? 'BFFR Mall' : 'BFFR Eats') + '.');
+    });
+
+    function removeWishItem(id) {
+      askConfirm('Remove this item from the shop?', 'Remove', () => {
+        const item = state.wishlist.find((p) => p.id === id);
+        if (item && item.imageId) idbDelete(item.imageId).catch(() => {});
+        state.wishlist = state.wishlist.filter((p) => p.id !== id);
+        ['mall', 'eats'].forEach((s) => { state.cart[s] = state.cart[s].filter((l) => l.productId !== id); });
+        saveState();
+        renderShop();
+      });
+    }
+
+    // ---------- 28. Keranjang ----------
+    function cartLines(store) {   // gabungkan isi keranjang dengan data produknya
+      return state.cart[store]
+        .map((line) => ({ ...line, product: findProduct(line.productId) }))
+        .filter((line) => line.product);
+    }
+    function addToCart(id) {
+      const p = findProduct(id);
+      if (!p) return;
+      const line = state.cart[p.store].find((l) => l.productId === id);
+      if (line) line.qty++;
+      else state.cart[p.store].push({ productId: id, qty: 1 });
+      saveState();
+      updateCartFab();
+      showToast('In your cart: ' + p.name);
+    }
+    function updateCartFab() {
+      const store = shopTab === 'orders' ? null : shopTab;
+      const count = store ? cartLines(store).reduce((n, l) => n + l.qty, 0) : 0;
+      $('cart-fab').hidden = currentScreen !== 'shop' || count === 0;
+      $('cart-count').textContent = '(' + count + ')';
+    }
+
+    let checkout = {};
+    $('cart-fab').addEventListener('click', () => {
+      checkout = { store: shopTab, voucher: null, payment: PAYMENTS[0] };
+      renderCart();
+      openSheet('cart-sheet');
+    });
+
+    function cartTotals(store, voucher) {
+      const subtotal = cartLines(store).reduce((sum, l) => sum + salePrice(l.product) * l.qty, 0);
+      let shipping = SHIPPING[store];
+      let discount = 0;
+      if (voucher === 'FREESHIP') shipping = 0;
+      if (voucher === 'BROKE10') discount = Math.min(25000, Math.round(subtotal * 0.1));
+      return { subtotal, shipping, discount, total: subtotal + shipping - discount };
+    }
+
+    function renderCart() {
+      const store = checkout.store;
+      const lines = cartLines(store);
+      $('cart-title').textContent = store === 'mall' ? 'Your BFFR Mall cart' : 'Your BFFR Eats order';
+      if (!lines.length) {
+        $('cart-body').innerHTML = '<p class="empty">Your cart is empty. Add something from the shop.</p>';
+        return;
+      }
+      const t = cartTotals(store, checkout.voucher);
+      $('cart-body').innerHTML = `
+        ${lines.map((l) => `
+          <div class="cart-line">
+            <span class="cart-thumb" style="background:${l.product.bg || '#FFFFFF'}">${productVisual(l.product)}</span>
+            <span class="log-main">
+              <span class="log-title">${escapeHtml(l.product.name)}</span>
+              <span class="log-meta">${rupiah(salePrice(l.product))}</span>
+            </span>
+            <span class="qty">
+              <button type="button" data-qty="-1" data-id="${l.productId}" aria-label="One less">−</button>
+              ${l.qty}
+              <button type="button" data-qty="1" data-id="${l.productId}" aria-label="One more">+</button>
+            </span>
+          </div>`).join('')}
+        <p class="field-label" style="margin-top:14px">Delivery</p>
+        <p style="margin:0 0 12px">${store === 'mall' ? '📦 Regular, arrives in 1–3 days' : '🛵 About 30 minutes'} to Home (pretend address)</p>
+        <p class="field-label">Voucher</p>
+        <div class="chip-row">
+          ${VOUCHERS.map((v) => `<button type="button" class="chip ${checkout.voucher === v.code ? 'selected' : ''}" data-voucher="${v.code}">🎟️ ${v.code}</button>`).join('')}
+        </div>
+        <p class="field-label">Payment</p>
+        <div class="chip-row">
+          ${PAYMENTS.map((pm) => `<button type="button" class="chip ${checkout.payment === pm ? 'selected' : ''}" data-payment="${pm}">${pm} (pretend)</button>`).join('')}
+        </div>
+        <div class="summary">
+          <div><span>Subtotal</span><span>${rupiah(t.subtotal)}</span></div>
+          <div><span>Delivery</span><span>${t.shipping ? rupiah(t.shipping) : 'Free'}</span></div>
+          ${t.discount ? `<div><span>Voucher</span><span>−${rupiah(t.discount)}</span></div>` : ''}
+          <div class="total"><span>Total (pretend)</span><span>${rupiah(t.total)}</span></div>
+        </div>
+        <button type="button" id="place-order" class="big-button" style="min-height:72px;font-size:22px">Place order</button>`;
+      hydrateImages($('cart-body'));
+    }
+
+    $('cart-body').addEventListener('click', (event) => {
+      const el = event.target.closest('button');
+      if (!el) return;
+      if (el.dataset.qty) changeQty(el.dataset.id, Number(el.dataset.qty));
+      else if (el.dataset.voucher) {
+        checkout.voucher = checkout.voucher === el.dataset.voucher ? null : el.dataset.voucher;  // ketuk lagi = batal
+        renderCart();
+      } else if (el.dataset.payment) {
+        checkout.payment = el.dataset.payment;
+        renderCart();
+      } else if (el.id === 'place-order') placeOrder();
+    });
+
+    function changeQty(id, delta) {
+      const cart = state.cart[checkout.store];
+      const line = cart.find((l) => l.productId === id);
+      if (!line) return;
+      line.qty += delta;
+      if (line.qty <= 0) state.cart[checkout.store] = cart.filter((l) => l !== line);
+      saveState();
+      renderCart();
+      updateCartFab();
+    }
+
+    // ---------- 29. Checkout pura-pura ----------
+    function placeOrder() {
+      const store = checkout.store;
+      const lines = cartLines(store);
+      if (!lines.length) return;
+      // Lama pengantaran realistis: makanan 25–40 menit, barang 1–3 hari
+      const durationMin = store === 'eats'
+        ? 25 + Math.floor(Math.random() * 16)
+        : (24 + Math.floor(Math.random() * 49)) * 60;
+      const order = {
+        id: makeId(), store, placedAt: Date.now(), durationMin,
+        items: lines.map((l) => ({
+          productId: l.productId, name: l.product.name, price: salePrice(l.product), qty: l.qty,
+          emoji: l.product.emoji, bg: l.product.bg, imageId: l.product.imageId || null
+        })),
+        ...cartTotals(store, checkout.voucher),
+        voucher: checkout.voucher, payment: checkout.payment, received: false
+      };
+      state.orders.unshift(order);   // unshift = tambahkan di AWAL daftar
+      state.cart[store] = [];
+      saveState();
+      closeSheet('cart-sheet');
+      updateCartFab();
+      const days = Math.max(1, Math.round(durationMin / 1440));
+      $('placed-emoji').textContent = store === 'eats' ? '🛵' : '📦';
+      $('placed-text').textContent = store === 'eats'
+        ? 'The restaurant got your order. Food arrives in about ' + durationMin + ' minutes.'
+        : 'The seller got your order. It should arrive in about ' + days + (days > 1 ? ' days.' : ' day.');
+      openSheet('placed-sheet');
+      celebrate();
+    }
+
+    $('placed-track').addEventListener('click', () => {
+      closeSheet('placed-sheet');
+      shopTab = 'orders';
+      renderShop();
+    });
+
+    // ---------- 30. Pelacakan pesanan ----------
+    function orderProgress(order) {             // 0 = baru dipesan, 1 = sampai
+      const elapsedMin = (Date.now() - order.placedAt) / 60000;
+      return Math.min(1, elapsedMin / order.durationMin);
+    }
+    function formatWhen(date) {
+      const sameDay = dayKey(date) === dayKey(new Date());
+      return date.toLocaleString('en-GB', sameDay
+        ? { hour: '2-digit', minute: '2-digit' }
+        : { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderOrders() {
+      // ingat detail mana yang sedang terbuka, supaya tidak tertutup saat diperbarui
+      const open = [...document.querySelectorAll('details[data-order][open]')].map((d) => d.dataset.order);
+      if (!state.orders.length) {
+        $('shop-content').innerHTML = '<p class="empty">No orders yet. Your pretend deliveries show up here.</p>';
+        return;
+      }
+      $('shop-content').innerHTML = state.orders.map((o) => orderCard(o, open.includes(o.id))).join('') +
+        (state.orders.some((o) => o.received)
+          ? '<button type="button" class="link-btn" data-shop="clear">Clear received orders</button>' : '');
+    }
+
+    function orderCard(o, detailsOpen) {
+      const progress = orderProgress(o);
+      const arrived = progress >= 1;
+      const steps = TRACK[o.store];
+      const current = steps.filter(([at]) => progress >= at).pop();
+      const eta = new Date(o.placedAt + o.durationMin * 60000);
+      const timeline = steps.map(([at, label]) => {
+        const done = progress >= at;
+        const when = new Date(o.placedAt + at * o.durationMin * 60000);
+        return `<li class="${done ? 'done' : ''}"><span>${done ? '✓' : '○'}</span><span>${label}</span>${done ? `<time>${formatWhen(when)}</time>` : ''}</li>`;
+      }).join('');
+      const pct = (progress * 100).toFixed(1);
+      return `
+        <div class="order-card ${arrived && !o.received ? 'arrived' : ''}">
+          <div class="order-head">
+            <span>${o.store === 'eats' ? '🍜 BFFR Eats' : '🛍️ BFFR Mall'}</span>
+            <span>${rupiah(o.total)}</span>
+          </div>
+          <p class="order-items">${escapeHtml(o.items.map((i) => i.qty + '× ' + i.name).join(', '))}</p>
+          <p class="order-status">${o.received ? 'Received ✓' : current[1] + (arrived ? '' : '. ETA ' + formatWhen(eta))}</p>
+          ${o.received ? '' : `
+            <div class="track" aria-hidden="true">
+              <div class="track-fill" style="width:${pct}%"></div>
+              <span class="vehicle" style="left:${pct}%">${o.store === 'eats' ? '🛵' : '🚚'}</span>
+            </div>
+            <details data-order="${o.id}" ${detailsOpen ? 'open' : ''}>
+              <summary>Tracking details</summary>
+              <ul class="timeline">${timeline}</ul>
+            </details>`}
+          ${arrived && !o.received ? `<button type="button" class="btn btn-skip btn-full" data-shop="received" data-id="${o.id}">I got it! 🎉</button>` : ''}
+        </div>`;
+    }
+
+    function markReceived(id) {
+      const o = state.orders.find((x) => x.id === id);
+      if (!o) return;
+      o.received = true;
+      saveState();
+      celebrate();
+      renderShop();
+      showToast('Enjoy your imaginary ' + o.items[0].name.toLowerCase() + '.');
+    }
+    function clearReceived() {
+      state.orders = state.orders.filter((o) => !o.received);
+      saveState();
+      renderShop();
+    }
+
+    /* =====================================================================
+       Tahap 7b: SCREENSHOT → BFFR MALL
+       1) pilih screenshot  2) tandai satu barang  3) baca teks (OCR)  4) simpan
+       ===================================================================== */
+
+    // ---------- 32. IndexedDB: laci besar untuk gambar ----------
+    // localStorage hanya muat teks ±5 MB. IndexedDB bisa menyimpan file gambar
+    // (Blob) dalam jumlah jauh lebih besar. Cara kerjanya "asinkron": hasilnya
+    // datang belakangan, jadi kita bungkus dengan Promise.
+    let dbPromise = null;
+    function idbOpen() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open('bffryab-images', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('images');  // dibuat sekali saja
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    // Jalankan satu pekerjaan di laci "images", lalu kembalikan hasilnya
+    function idb(mode, work) {
+      dbPromise = dbPromise || idbOpen();
+      return dbPromise.then((db) => new Promise((resolve, reject) => {
+        const tx = db.transaction('images', mode);
+        const req = work(tx.objectStore('images'));
+        tx.oncomplete = () => resolve(req.result);
+        tx.onerror = () => reject(tx.error);
+      }));
+    }
+    const idbPut = (id, blob) => idb('readwrite', (store) => store.put(blob, id));
+    const idbGet = (id) => idb('readonly', (store) => store.get(id));
+    const idbDelete = (id) => idb('readwrite', (store) => store.delete(id));
+    const idbClear = () => idb('readwrite', (store) => store.clear());
+
+    // Tampilkan gambar dari IndexedDB ke setiap <img data-img="...">
+    const imageUrls = {};   // id → alamat sementara gambar (supaya tidak dibaca ulang)
+    async function hydrateImages(root) {
+      for (const img of root.querySelectorAll('img[data-img]')) {
+        const id = img.dataset.img;
+        if (!imageUrls[id]) {
+          const blob = await idbGet(id).catch(() => null);
+          if (!blob) { img.replaceWith('🖼️'); continue; }
+          imageUrls[id] = URL.createObjectURL(blob);
+        }
+        img.src = imageUrls[id];
+      }
+    }
+
+    // Minta browser agar tidak menghapus data ini saat memori HP penuh
+    function requestPersist() {
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    }
+
+    // ---------- 33. Langkah 1: pilih screenshot ----------
+    let shot = { url: null, box: null, count: 0, crop: null, store: 'mall' };
+
+    function openShotSheet() {
+      shot.store = shopTab === 'eats' ? 'eats' : 'mall';
+      showShotPart('pick');
+      $('shot-file').value = '';
+      openSheet('shot-sheet');
+    }
+    function showShotPart(part) {   // 'pick' | 'crop' | 'result'
+      $('shot-pick').hidden = part !== 'pick';
+      $('shot-crop').hidden = part !== 'crop';
+      $('shot-result').hidden = part !== 'result';
+    }
+
+    $('shot-file').addEventListener('change', () => {
+      const file = $('shot-file').files[0];
+      if (!file) return;
+      if (shot.url) URL.revokeObjectURL(shot.url);   // buang gambar sebelumnya dari memori
+      shot.url = URL.createObjectURL(file);
+      shot.count = 0;
+      $('crop-img').onload = () => {
+        clearBox();
+        $('crop-hint').textContent = 'Drag a box around one item: its name and price.';
+        $('shot-count').textContent = '';
+        showShotPart('crop');
+      };
+      $('crop-img').onerror = () => showToast("Couldn't open that picture. Try a PNG or JPG screenshot.");
+      $('crop-img').src = shot.url;
+    });
+    $('shot-other').addEventListener('click', () => {
+      $('shot-file').value = '';
+      showShotPart('pick');
+    });
+
+    // ---------- 34. Langkah 2: gambar kotak dengan jari ----------
+    let dragStart = null;
+    function pointInImage(event) {
+      const rect = $('crop-img').getBoundingClientRect();
+      return {
+        x: Math.min(Math.max(event.clientX - rect.left, 0), rect.width),
+        y: Math.min(Math.max(event.clientY - rect.top, 0), rect.height)
+      };
+    }
+    function drawBox() {
+      const b = shot.box;
+      Object.assign($('crop-box').style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' });
+      $('crop-box').hidden = false;
+    }
+    function clearBox() {
+      shot.box = null;
+      $('crop-box').hidden = true;
+      $('crop-read').disabled = true;
+    }
+    $('crop-wrap').addEventListener('pointerdown', (event) => {
+      dragStart = pointInImage(event);
+      $('crop-wrap').setPointerCapture(event.pointerId);   // tetap ikuti jari walau keluar gambar
+      shot.box = { ...dragStart, w: 0, h: 0 };
+      drawBox();
+    });
+    $('crop-wrap').addEventListener('pointermove', (event) => {
+      if (!dragStart) return;
+      const now = pointInImage(event);
+      shot.box = {
+        x: Math.min(dragStart.x, now.x), y: Math.min(dragStart.y, now.y),
+        w: Math.abs(now.x - dragStart.x), h: Math.abs(now.y - dragStart.y)
+      };
+      drawBox();
+    });
+    $('crop-wrap').addEventListener('pointerup', () => {
+      dragStart = null;
+      if (!shot.box || shot.box.w < 20 || shot.box.h < 20) return clearBox();   // kotak terlalu kecil
+      $('crop-read').disabled = false;
+    });
+
+    // Potong bagian gambar ke kanvas, dalam resolusi ASLI screenshot
+    function cropCanvas(box) {
+      const img = $('crop-img');
+      const scale = img.naturalWidth / img.clientWidth;   // gambar di layar lebih kecil dari aslinya
+      const sx = box ? box.x * scale : 0;
+      const sy = box ? box.y * scale : 0;
+      const sw = box ? box.w * scale : img.naturalWidth;
+      const sh = box ? box.h * scale : img.naturalHeight;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(sw);
+      canvas.height = Math.round(sh);
+      canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    }
+    // Kecilkan untuk disimpan (maks 600 px), simpan sebagai JPEG
+    function thumbnailBlob(canvas) {
+      const ratio = Math.min(1, 600 / Math.max(canvas.width, canvas.height));
+      const small = document.createElement('canvas');
+      small.width = Math.round(canvas.width * ratio);
+      small.height = Math.round(canvas.height * ratio);
+      const ctx = small.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, small.width, small.height);
+      ctx.drawImage(canvas, 0, 0, small.width, small.height);
+      return new Promise((resolve) => small.toBlob(resolve, 'image/jpeg', 0.82));
+    }
+
+    $('crop-read').addEventListener('click', () => readItem(shot.box));
+    $('crop-whole').addEventListener('click', () => readItem(null));
+
+    // ---------- 35. Langkah 3: baca teks dengan OCR (Tesseract.js) ----------
+    // Mesin pembaca baru diunduh saat pertama dipakai, lalu disimpan oleh browser.
+    const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js';
+    let ocrWorkerPromise = null;
+    let onOcrProgress = () => {};
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Could not load ' + src));
+        document.head.appendChild(s);
+      });
+    }
+    function getOcrWorker() {
+      if (!ocrWorkerPromise) {
+        ocrWorkerPromise = (window.Tesseract ? Promise.resolve() : loadScript(TESSERACT_URL))
+          // 'ind+eng' = bahasa Indonesia + Inggris, karena nama produk sering campur
+          .then(() => Tesseract.createWorker('ind+eng', 1, { logger: (m) => onOcrProgress(m) }))
+          .catch((err) => { ocrWorkerPromise = null; throw err; });   // boleh dicoba lagi nanti
+      }
+      return ocrWorkerPromise;
+    }
+
+    async function readItem(box) {
+      $('shot-save').disabled = true;   // kunci tombol simpan sampai selesai membaca
+      const canvas = cropCanvas(box);
+      shot.crop = await thumbnailBlob(canvas);
+      $('shot-thumb').src = URL.createObjectURL(shot.crop);
+      $('shot-name').value = '';
+      $('shot-price').value = '';
+      $('shot-prices').innerHTML = '';
+      selectChip('shot-store', shot.store);
+      $('shot-save').disabled = true;
+      showShotPart('result');
+
+      onOcrProgress = (m) => {
+        const pct = Math.round((m.progress || 0) * 100);
+        $('ocr-status').textContent = m.status === 'recognizing text'
+          ? '🔎 Reading the text… ' + pct + '%'
+          : '⬇️ Getting the text reader ready… ' + pct + '%';
+      };
+      $('ocr-status').textContent = '⬇️ Getting the text reader ready…';
+      try {
+        const worker = await getOcrWorker();
+        const { data } = await worker.recognize(canvas);
+        const found = parseShotText(data.text);
+        $('shot-name').value = found.name;
+        if (found.prices.length) $('shot-price').value = Math.min(...found.prices);
+        $('shot-prices').innerHTML = found.prices.length > 1
+          ? found.prices.map((n) => `<button type="button" class="chip chip-small" data-amount="${n}">${rupiah(n)}</button>`).join('')
+          : '';
+        $('ocr-status').textContent = found.name || found.prices.length
+          ? '✅ Done. Check the name and price, then fix anything that looks off.'
+          : "🤔 Couldn't find a name or price. Type them in yourself.";
+      } catch (err) {
+        $('ocr-status').textContent = "📵 Couldn't read the text (no internet the first time?). Type the name and price yourself.";
+      }
+      $('shot-save').disabled = false;
+    }
+
+    // Dari teks mentah → tebakan nama & harga
+    function parseShotText(text) {
+      // Harga: "Rp159.000", "Rp 1.250.000", "Rp89,900"
+      const prices = [];
+      const priceRe = /R\s?p\s?\.?\s?(\d{1,3}(?:[.,]\d{3})+|\d{4,})/gi;
+      let match;
+      while ((match = priceRe.exec(text)) !== null) {
+        const n = Number(match[1].replace(/[.,]/g, ''));
+        if (n >= 100 && !prices.includes(n)) prices.push(n);
+      }
+      // Nama: 1–2 baris pertama yang isinya kebanyakan huruf,
+      // sebelum ketemu baris harga/variasi/jumlah
+      // (OCR kadang salah eja "Variasi" jadi "Valiasi", jadi polanya dibuat longgar)
+      const SKIP = /rp\s?\d|va[rl]ia[sn]i|varian|stok|terjual|voucher|ongkir|diskon|checkout|keranjang|hapus|beli sekarang|^x?\d+$|^[a-z]+[:.;]\s/i;
+      const nameLines = [];
+      for (const raw of text.split('\n')) {
+        const line = raw.trim();
+        if (!line) { if (nameLines.length) break; else continue; }
+        if (SKIP.test(line)) { if (nameLines.length) break; else continue; }
+        const letters = (line.match(/[a-z]/gi) || []).length;
+        if (line.length >= 3 && letters / line.length >= 0.5) nameLines.push(line);
+        if (nameLines.length === 2) break;
+      }
+      return { name: nameLines.join(' ').slice(0, 80), prices };
+    }
+
+    $('shot-prices').addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-amount]');
+      if (chip) $('shot-price').value = chip.dataset.amount;
+    });
+    $('shot-store').addEventListener('click', (event) => {
+      const chip = event.target.closest('.chip');
+      if (!chip) return;
+      shot.store = chip.dataset.value;
+      selectChip('shot-store', shot.store);
+    });
+    $('shot-back').addEventListener('click', () => showShotPart('crop'));
+
+    // ---------- 36. Langkah 4: simpan ke toko ----------
+    $('shot-save').addEventListener('click', async () => {
+      const name = $('shot-name').value.trim();
+      const price = Number($('shot-price').value) || 0;
+      if (!name) return showToast('Give it a name.');
+      if (price <= 0) return showToast('Add the price.');
+      const imageId = 'img-' + makeId();
+      try {
+        await idbPut(imageId, shot.crop);
+      } catch (err) {
+        return showToast("Couldn't save the picture. Your phone storage may be full.");
+      }
+      state.wishlist.unshift({
+        id: 'w-' + makeId(), store: shot.store, name, price, emoji: null, imageId,
+        bg: '#FFFFFF', source: 'screenshot', createdAt: new Date().toISOString()
+      });
+      saveState();
+      requestPersist();
+      shot.count++;
+      shopTab = shot.store;
+      renderShop();   // toko di belakang lembar ikut diperbarui
+      // Kembali ke screenshot yang sama untuk menandai barang berikutnya
+      clearBox();
+      $('crop-hint').textContent = 'Added! Drag a box around the next item, or close when you’re done.';
+      $('shot-count').textContent = shot.count + (shot.count > 1 ? ' items' : ' item') + ' added from this screenshot.';
+      showShotPart('crop');
+      showToast('Added to ' + (shot.store === 'mall' ? 'BFFR Mall' : 'BFFR Eats') + '.');
+    });
+
+    // ---------- 37. Detak jam ----------
+    // Setiap 30 detik: perbarui hitung mundur waiting room & posisi kurir
+    setInterval(() => {
+      if (currentScreen === 'home') renderWaiting();
+      if (currentScreen === 'shop' && shopTab === 'orders') renderOrders();
+      if (currentScreen === 'shop') $('orders-badge').textContent = state.orders.filter((o) => !o.received).length || '';
+    }, 30000);
+    // Setiap 1 detik: hitung mundur flash sale
+    setInterval(() => {
+      const el = $('flash-time');
+      if (el) el.textContent = flashEndsIn();
+    }, 1000);
+
+    // ---------- Mulai! ----------
+    showScreen('home');
+  </script>
+</body>
+</html>
